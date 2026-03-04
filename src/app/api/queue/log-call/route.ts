@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logCallOutcome } from '@/lib/queueService';
 import { CallLogPayload } from '@/lib/types';
+import { getSession } from '@/lib/auth';
 
 export async function POST(req: Request) {
     try {
@@ -10,8 +11,14 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        // Without auth, we use a generic identifier for locking
-        const email = 'guest_sdr@system.local';
+        const session = await getSession();
+
+        if (!session || !session.username) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Use actual session username instead of mock
+        const email = session.username;
         await logCallOutcome(payload, email);
 
         return NextResponse.json({ success: true, message: 'Call logged successfully' });

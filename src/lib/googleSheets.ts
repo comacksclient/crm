@@ -111,3 +111,45 @@ export async function appendToMeetings(lead: Lead, bookedBy: string) {
         requestBody: { values }
     });
 }
+
+export interface MeetingRow {
+    lead_identity: string;
+    meeting_date: string;
+    meeting_time: string;
+    meeting_status: string;
+    booked_by: string;
+}
+
+export async function getMeetings(): Promise<MeetingRow[]> {
+    if (!SPREADSHEET_ID) return [];
+
+    // We get auth and sheets locally to avoid module top-level await issues
+    const auth = new google.auth.GoogleAuth({
+        credentials: {
+            client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+            private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        },
+        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    });
+
+    const sheets = google.sheets({ version: 'v4', auth });
+
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            spreadsheetId: SPREADSHEET_ID,
+            range: 'Meetings!A2:E',
+        });
+
+        const rows = response.data.values || [];
+        return rows.map(row => ({
+            lead_identity: row[0] || '',
+            meeting_date: row[1] || '',
+            meeting_time: row[2] || '',
+            meeting_status: row[3] || '',
+            booked_by: row[4] || '',
+        }));
+    } catch (e) {
+        console.error("Error fetching meetings:", e);
+        return [];
+    }
+}

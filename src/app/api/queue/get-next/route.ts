@@ -1,10 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getNextLead } from '@/lib/queueService';
+import { getSession } from '@/lib/auth';
 
 export async function POST(req: Request) {
     try {
-        // Without auth, we use a generic identifier for locking
-        const email = 'guest_sdr@system.local';
+        const session = await getSession();
+
+        if (!session || !session.username) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        // Use authentic username for locking leads
+        const email = session.username;
         const lead = await getNextLead(email);
 
         if (!lead) {
