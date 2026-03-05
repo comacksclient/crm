@@ -55,15 +55,10 @@ export async function logCallOutcome(payload: CallLogPayload, userEmail: string)
     const targetLead = leads.find(l => l.lead_identity === payload.lead_identity);
 
     if (!targetLead) throw new Error('Lead not found');
-    if (targetLead.locked_by !== userEmail) throw new Error('Lead is not locked by you. Lock might have expired.');
 
     // Apply logic
     const updatedLead = runActionEngine(targetLead, payload);
     updatedLead.priority_score = calculatePriorityScore(updatedLead);
-
-    // Unlock
-    updatedLead.locked_by = null;
-    updatedLead.locked_at = null;
 
     // Update sheet
     // @ts-expect-error - _rowIndex is added internally by getCallQueue

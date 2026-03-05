@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logCallOutcome } from '@/lib/queueService';
 import { CallLogPayload } from '@/lib/types';
-import { getSession } from '@/lib/auth';
+import { auth } from '@/auth';
 
 export async function POST(req: Request) {
     try {
@@ -11,23 +11,19 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 
-        const session = await getSession();
+        const session = await auth();
 
-        if (!session || !session.username) {
+        if (!session || !session.user || !session.user.email) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Use actual session username instead of mock
-        const email = session.username;
+        // Use authentic email instead of mock username
+        const email = session.user.email;
         await logCallOutcome(payload, email);
 
         return NextResponse.json({ success: true, message: 'Call logged successfully' });
     } catch (error: any) {
         console.error('Error in /api/queue/log-call:', error);
-        // Determine if it's a lock expiry error
-        if (error.message?.includes('Lock might have expired')) {
-            return NextResponse.json({ error: error.message }, { status: 409 });
-        }
         return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
     }
 }

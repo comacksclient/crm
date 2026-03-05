@@ -1,23 +1,33 @@
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { getSession } from '@/lib/auth';
+import { auth as nextAuth } from '@/auth';
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
     try {
-        const session = await getSession();
+        const session = await nextAuth();
         // Only admins can create system sheets
-        if (!session || session.role !== 'ADMIN') {
+        if (!session || !session.user || (session.user as any).role !== 'ADMIN') {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const auth = new google.auth.GoogleAuth({
-            credentials: {
-                client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-                private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-            },
-            scopes: ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive.file'],
+        const config = await prisma.systemConfig.findUnique({
+            where: { key: 'google_refresh_token' }
         });
 
+        if (!config || !config.value) {
+            return NextResponse.json({ error: 'Google Account not linked' }, { status: 403 });
+        }
+
+        const auth = new google.auth.OAuth2(
+            process.env.GOOGLE_CLIENT_ID,
+            process.env.GOOGLE_CLIENT_SECRET,
+            `${process.env.NEXTAUTH_URL}/api/auth/google/callback`
+        );
+
+        auth.setCredentials({ refresh_token: config.value });
         const sheets = google.sheets({ version: 'v4', auth });
 
         // 1. Create the new Spreadsheet

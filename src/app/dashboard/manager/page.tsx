@@ -1,4 +1,4 @@
-import { getSession } from '@/lib/auth';
+import { auth } from '@/auth';
 import { getMeetings } from '@/lib/googleSheets';
 import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,9 +6,9 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 export default async function ManagerDashboard() {
-    const session = await getSession();
+    const session = await auth();
 
-    if (!session || (session.role !== 'MANAGER' && session.role !== 'ADMIN')) {
+    if (!session || !session.user || ((session.user as any).role !== 'MANAGER' && (session.user as any).role !== 'ADMIN')) {
         redirect('/queue');
     }
 
@@ -20,7 +20,7 @@ export default async function ManagerDashboard() {
                 <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Manager Dashboard</h1>
-                        <p className="text-slate-500 text-sm">Welcome back, {session.username}</p>
+                        <p className="text-slate-500 text-sm">Welcome back, {session.user.name || session.user.email}</p>
                     </div>
                     <div className="flex gap-4">
                         <Link href="/queue">

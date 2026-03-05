@@ -1,18 +1,30 @@
 import { google } from 'googleapis';
 import { Lead } from './types';
+import { PrismaClient } from '@prisma/client';
 
-// Authentication
-const getAuth = () => {
-    return new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+const prisma = new PrismaClient();
+
+// Authentication via OAuth 2.0 (No longer using Service Account Keys)
+const getAuth = async () => {
+    const config = await prisma.systemConfig.findUnique({
+        where: { key: 'google_refresh_token' }
     });
+
+    if (!config || !config.value) {
+        throw new Error('Google OAuth Refresh Token is missing. Please link account in Admin Dashboard.');
+    }
+
+    const oAuth2Client = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+        `${process.env.NEXTAUTH_URL}/api/auth/google/callback`
+    );
+
+    oAuth2Client.setCredentials({ refresh_token: config.value });
+    return oAuth2Client;
 };
 
-const getSheets = () => google.sheets({ version: 'v4', auth: getAuth() });
+const getSheets = async () => google.sheets({ version: 'v4', auth: await getAuth() });
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
@@ -22,7 +34,7 @@ export async function getCallQueue(): Promise<{ leads: Lead[], metadata: any }> 
         console.warn("SPREADSHEET_ID is missing");
         return { leads: [], metadata: { total: 0 } };
     }
-    const sheets = getSheets();
+    const sheets = await getSheets();
     const response = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
         range: 'Call_Queue!A2:R',
@@ -59,7 +71,7 @@ export async function getCallQueue(): Promise<{ leads: Lead[], metadata: any }> 
 
 export async function updateLeadRow(rowIndex: number, lead: Lead) {
     if (!SPREADSHEET_ID) return;
-    const sheets = getSheets();
+    const sheets = await getSheets();
     const values = [
         [
             lead.lead_identity,
@@ -93,7 +105,7 @@ export async function updateLeadRow(rowIndex: number, lead: Lead) {
 
 export async function appendToMeetings(lead: Lead, bookedBy: string) {
     if (!SPREADSHEET_ID) return;
-    const sheets = getSheets();
+    const sheets = await getSheets();
     const values = [
         [
             lead.lead_identity,
@@ -123,18 +135,8 @@ export interface MeetingRow {
 export async function getMeetings(): Promise<MeetingRow[]> {
     if (!SPREADSHEET_ID) return [];
 
-    // We get auth and sheets locally to avoid module top-level await issues
-    const auth = new google.auth.GoogleAuth({
-        credentials: {
-            client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-            private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        },
-        scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-    });
-
-    const sheets = google.sheets({ version: 'v4', auth });
-
     try {
+        const sheets = await getSheets();
         const response = await sheets.spreadsheets.values.get({
             spreadsheetId: SPREADSHEET_ID,
             range: 'Meetings!A2:E',

@@ -6,13 +6,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Loader2, ExternalLink, PlusCircle } from 'lucide-react';
+import { Loader2, ExternalLink, PlusCircle, UploadCloud, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
+import Papa from 'papaparse';
 
 export default function AdminDashboard() {
     const { data: session, status } = useSession();
     const [generating, setGenerating] = useState(false);
     const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+
+    const [uploading, setUploading] = useState(false);
+    const [csvFile, setCsvFile] = useState<File | null>(null);
 
     // Wait for auth resolution
     if (status === 'loading') return <div className="p-12 text-center text-slate-500">Loading admin controls...</div>;
@@ -38,6 +42,65 @@ export default function AdminDashboard() {
         } finally {
             setGenerating(false);
         }
+    };
+
+    const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            setCsvFile(e.target.files[0]);
+        }
+    };
+
+    const processCSVAndUpload = () => {
+        if (!csvFile) return;
+        setUploading(true);
+
+        Papa.parse(csvFile, {
+            header: true,
+            skipEmptyLines: true,
+            complete: async (results) => {
+                try {
+                    // Try to flexibly map required fields from the CSV
+                    const mappedLeads = results.data.map((row: any) => {
+                        // Look for common variations of headers
+                        const clinicName = row['Clinic Name'] || row['clinic'] || row['name'] || row['Clinic'];
+                        const phoneNumber = row['Phone Number'] || row['phone'] || row['Phone'];
+                        const city = row['City'] || row['city'] || row['Location'];
+
+                        return { clinicName, phoneNumber, city };
+                    }).filter(l => l.clinicName || l.phoneNumber); // Remove totally blank rows
+
+                    if (mappedLeads.length === 0) {
+                        toast.error("Could not find required columns (Clinic Name, Phone Number, City) in CSV.");
+                        setUploading(false);
+                        return;
+                    }
+
+                    const res = await fetch('/api/leads/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ leads: mappedLeads })
+                    });
+
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        toast.success(`Successfully uploaded ${mappedLeads.length} leads!`);
+                        setCsvFile(null); // Reset form
+                    } else {
+                        toast.error(data.error || 'Failed to upload leads');
+                    }
+                } catch (err) {
+                    console.error("Upload error:", err);
+                    toast.error("An error occurred while dispatching leads");
+                } finally {
+                    setUploading(false);
+                }
+            },
+            error: (error) => {
+                toast.error(`CSV Parsing error: ${error.message}`);
+                setUploading(false);
+            }
+        });
     };
 
     return (
@@ -78,6 +141,36 @@ export default function AdminDashboard() {
                                     <li>O: lead_status (Set to &ldquo;Active&rdquo;)</li>
                                 </ul>
                             </div>
+
+                            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                                <h4 className="font-semibold text-sm">Upload Leads via CSV</h4>
+                                <div className="space-y-3 p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <FileSpreadsheet className="h-4 w-4 text-indigo-600" />
+                                        <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-300">Fast Ingestion</p>
+                                    </div>
+                                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                                        Upload a CSV file with columns: <b>Clinic Name</b>, <b>Phone Number</b>, and <b>City</b>. The system will automatically map and append these to your connected Google Sheet.
+                                    </p>
+
+                                    <input
+                                        type="file"
+                                        accept=".csv"
+                                        onChange={handleFileUpload}
+                                        className="text-sm border p-2 rounded w-full bg-white dark:bg-slate-900 mb-2 cursor-pointer"
+                                    />
+
+                                    <Button
+                                        className="w-full bg-indigo-600 hover:bg-indigo-700 gap-2"
+                                        onClick={processCSVAndUpload}
+                                        disabled={uploading || !csvFile}
+                                    >
+                                        {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />}
+                                        {uploading ? 'Parsing and Uploading...' : 'Upload CSV Leads'}
+                                    </Button>
+                                </div>
+                            </div>
+
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
                                 <h4 className="font-semibold text-sm">Don't have a configured sheet yet?</h4>
                                 <p className="text-xs text-slate-500">
@@ -120,6 +213,41 @@ export default function AdminDashboard() {
 
                     <Card>
                         <CardHeader>
+                            <CardTitle>Google OAuth System</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <p className="text-sm text-slate-600 dark:text-slate-400">
+                                This system requires a linked Google Account to read/write from <b>Google Sheets</b>.
+                                Since Service Account Private Keys are blocked by organizational policy, you must authorize your personal or workspace Google Account below.
+                            </p>
+
+                            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oauth') === 'success' && (
+                                <div className="p-3 mb-2 bg-green-50 text-green-700 border border-green-200 rounded-md text-sm font-medium">
+                                    Google Account linked successfully! System is now running.
+                                </div>
+                            )}
+
+                            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('error') && (
+                                <div className="p-3 mb-2 bg-red-50 text-red-700 border border-red-200 rounded-md text-sm font-medium">
+                                    OAuth Error: {new URLSearchParams(window.location.search).get('error')}
+                                </div>
+                            )}
+
+                            <Button className="w-full bg-blue-600 hover:bg-blue-700 gap-2" asChild>
+                                <a href="/api/auth/google">Link Google Account (OAuth)</a>
+                            </Button>
+
+                            <div className="text-xs text-slate-500 mt-2 space-y-1 bg-slate-100 p-3 rounded">
+                                <p><strong>Required setup before clicking:</strong></p>
+                                <li>Ensure `GOOGLE_CLIENT_ID` is in `.env`</li>
+                                <li>Ensure `GOOGLE_CLIENT_SECRET` is in `.env`</li>
+                                <li>Redirect URI in GCP must be EXACTLY: <br /><code>{process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/google/callback</code></li>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
                             <CardTitle>System Health</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -129,14 +257,6 @@ export default function AdminDashboard() {
                                     <span className="text-xs font-bold text-green-600 uppercase px-2 py-1 bg-green-100 dark:bg-green-900/50 rounded-full">Online</span>
                                 </div>
                                 <p className="text-xs text-green-600 dark:text-green-400">Automated rules and priority routing are processing.</p>
-                            </div>
-
-                            <div className="p-4 border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/20 rounded-lg">
-                                <div className="flex justify-between items-center mb-1">
-                                    <span className="font-semibold text-blue-800 dark:text-blue-300">Google Sheets Sync</span>
-                                    <span className="text-xs font-bold text-blue-600 uppercase px-2 py-1 bg-blue-100 dark:bg-blue-900/50 rounded-full">Connected</span>
-                                </div>
-                                <p className="text-xs text-blue-600 dark:text-blue-400">Successfully reading and writing to Spreadsheet ID.</p>
                             </div>
                         </CardContent>
                     </Card>
