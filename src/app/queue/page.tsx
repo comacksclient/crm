@@ -27,6 +27,7 @@ export default function QueuePage() {
     const [notes, setNotes] = useState('');
     const [meetingDate, setMeetingDate] = useState('');
     const [meetingTime, setMeetingTime] = useState('');
+    const [whatsappSent, setWhatsappSent] = useState(false);
 
     useEffect(() => {
         fetchLeads();
@@ -57,6 +58,7 @@ export default function QueuePage() {
         setNotes('');
         setMeetingDate('');
         setMeetingTime('');
+        setWhatsappSent(false);
     };
 
     const handleCloseModal = () => {
@@ -66,15 +68,21 @@ export default function QueuePage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!activeLead || !outcome) return;
+        if (!notes.trim()) {
+            toast.error("Call Notes are mandatory to advance the workflow!");
+            return;
+        }
 
         setSubmitting(true);
         try {
             const payload = {
+                lead_id: activeLead._rowIndex as string,
                 lead_identity: activeLead.lead_identity,
                 outcome: outcome as CallOutcome,
                 doctorType: doctorType as DoctorType || undefined,
                 interestLevel: interestLevel as InterestLevel || undefined,
                 notes,
+                whatsappDetailsSent: whatsappSent,
                 meetingDate: meetingDate || undefined,
                 meetingTime: meetingTime || undefined,
             };
@@ -112,9 +120,17 @@ export default function QueuePage() {
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">CRM Table View</h1>
                         <p className="text-sm text-slate-500">View and log interactions for all Active leads. Sorted by priority.</p>
                     </div>
-                    <Button variant="outline" onClick={() => signOut({ callbackUrl: '/login' })} className="gap-2">
-                        <LogOut className="h-4 w-4" /> Sign Out
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Button variant="outline" onClick={() => window.location.href = '/meetings'} className="gap-2 text-green-600 border-green-200 hover:bg-green-50">
+                            Booked Meetings
+                        </Button>
+                        <Button variant="outline" onClick={() => window.location.href = '/dashboard/admin'} className="gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                            Setup & Uploads
+                        </Button>
+                        <Button variant="outline" onClick={() => signOut({ callbackUrl: '/login' })} className="gap-2">
+                            <LogOut className="h-4 w-4" /> Sign Out
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Data Table */}
@@ -279,14 +295,30 @@ export default function QueuePage() {
                                     </div>
                                 )}
 
+                                {outcome === 'Doctor Connected' && interestLevel === 3 && (
+                                    <div className="flex items-center gap-3 mt-4 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
+                                        <input
+                                            type="checkbox"
+                                            id="whatsappSent"
+                                            checked={whatsappSent}
+                                            onChange={(e) => setWhatsappSent(e.target.checked)}
+                                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
+                                        />
+                                        <Label htmlFor="whatsappSent" className="cursor-pointer text-sm font-semibold">
+                                            WhatsApp Details Evaluated / Sent for Nurture Flow
+                                        </Label>
+                                    </div>
+                                )}
+
                                 <div className="space-y-2">
-                                    <Label htmlFor="notes">Call Notes</Label>
+                                    <Label htmlFor="notes">Call Notes <span className="text-red-500">*</span></Label>
                                     <Textarea
                                         id="notes"
                                         placeholder="Add any additional context or remarks here..."
                                         className="min-h-[100px] resize-y"
                                         value={notes}
                                         onChange={(e) => setNotes(e.target.value)}
+                                        required
                                     />
                                 </div>
                             </div>

@@ -1,7 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { getCallQueue } from '@/lib/googleSheets';
+import { PrismaClient } from '@prisma/client';
 import { calculatePriorityScore } from '@/lib/actionEngine';
+import { mapPrismaToLead } from '@/lib/googleSheets';
+
+const prisma = new PrismaClient();
 
 export async function GET() {
     try {
@@ -10,18 +13,24 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        const { leads } = await getCallQueue();
+        // Scalable Database Querying: Only fetch precisely 'Active' leads (up to 200)
+        // Disqualified leads have already been hard deleted, and Meeting Booked leads have their own page.
+        const dbLeads = await prisma.lead.findMany({
+            where: { lead_status: 'Active' },
+            take: 200, // Hard limit to ensure frontend DOM doesn't crash on huge datasets
+        });
 
-        // 1. Filter out Disqualified and Meeting Booked leads from the main caller list (unless we want to show all)
-        // design.md specifies we only call Active leads or those needing action.
-        const activeLeads = leads.filter(lead => lead.lead_status !== 'Disqualified' && lead.lead_status !== 'Meeting Booked');
+        // Compute scores and sort efficiently
+        const activeLeads = dbLeads.map(mapPrismaToLead);
 
-        // 2. Sort leads by Priority Score (DESC), then by touch count (ASC) so freshest leads are on top among ties
+        activeLeads.forEach(lead => {
+            lead.priority_score = calculatePriorityScore(lead);
+        });
+
+        // Sort leads by Priority Score (DESC), then by touch count (ASC) so freshest leads are on top among ties
         activeLeads.sort((a, b) => {
-            const scoreA = calculatePriorityScore(a);
-            const scoreB = calculatePriorityScore(b);
-            if (scoreB !== scoreA) {
-                return scoreB - scoreA; // Descending
+            if (b.priority_score !== a.priority_score) {
+                return b.priority_score - a.priority_score; // Descending
             }
             return (a.touch_count || 0) - (b.touch_count || 0); // Ascending
         });

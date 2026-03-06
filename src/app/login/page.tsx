@@ -20,10 +20,10 @@ export default function LoginPage() {
             <Card className="w-full max-w-md shadow-xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="space-y-2 text-center pb-6">
                     <CardTitle className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-                        Smart Queue
+                        Outbound CRM
                     </CardTitle>
                     <CardDescription className="text-slate-500 dark:text-slate-400">
-                        Sign in with Google to access the outbound system
+                        Sign in with Google to access your tasks
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -43,9 +43,9 @@ export default function LoginPage() {
                     </Button>
 
                     <div className="mt-8 p-4 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg text-sm transition-colors border border-indigo-100 dark:border-indigo-900/50">
-                        <p className="font-semibold text-indigo-900 dark:text-indigo-200 mb-2">Internal Users Only</p>
+                        <p className="font-semibold text-indigo-900 dark:text-indigo-200 mb-2">Welcome</p>
                         <p className="text-xs opacity-75 text-indigo-700 dark:text-indigo-400">
-                            By default, all new accounts are registered as an SDR. To access the Admin Dashboard, your email must be pre-configured as the System Administrator.
+                            By continuing, you are accessing the internal organization CRM workspace.
                         </p>
                     </div>
                 </CardContent>

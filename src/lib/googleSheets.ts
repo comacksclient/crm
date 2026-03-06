@@ -1,127 +1,87 @@
-import { google } from 'googleapis';
+import { PrismaClient, Lead as PrismaLead, Meeting as PrismaMeeting } from '@prisma/client';
 import { Lead } from './types';
-import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Authentication via OAuth 2.0 (No longer using Service Account Keys)
-const getAuth = async () => {
-    const config = await prisma.systemConfig.findUnique({
-        where: { key: 'google_refresh_token' }
-    });
+// Map Prisma DB Model to Frontend Lead Interface
+export const mapPrismaToLead = (dbLead: any): Lead => ({
+    _rowIndex: dbLead.id, // Using DB UUID instead of spreadsheet row index
+    lead_identity: dbLead.lead_identity,
+    assignment_info: dbLead.assignment_info,
+    call_outcome: dbLead.call_outcome as any,
+    doctor_type: dbLead.doctor_type as any,
+    interest_level: dbLead.interest_level,
+    call_notes: dbLead.call_notes || '',
+    next_action_type: dbLead.next_action_type as any,
+    whatsapp_details_sent: dbLead.whatsapp_details_sent,
+    next_action_date: dbLead.next_action_date || '',
+    last_call_date: dbLead.last_call_date || '',
+    touch_count: dbLead.touch_count,
+    meeting_status: null, // Derived from relations if needed
+    meeting_date: '',
+    meeting_time: '',
+    lead_status: dbLead.lead_status as any,
+    priority_score: dbLead.priority_score,
+    locked_by: null,
+    locked_at: null,
+});
 
-    if (!config || !config.value) {
-        throw new Error('Google OAuth Refresh Token is missing. Please link account in Admin Dashboard.');
+// getCallQueue removed: Legacy Google Sheets function phased out for direct scalable Prisma calls.
+// In the new system, rowIndex is actually the UUID string of the lead
+export async function updateLeadRow(rowIndex: string, lead: Lead) {
+    try {
+        await prisma.lead.update({
+            where: { id: rowIndex },
+            data: {
+                call_outcome: lead.call_outcome,
+                doctor_type: lead.doctor_type,
+                interest_level: lead.interest_level,
+                call_notes: lead.call_notes,
+                next_action_type: lead.next_action_type,
+                whatsapp_details_sent: lead.whatsapp_details_sent,
+                next_action_date: lead.next_action_date,
+                last_call_date: lead.last_call_date,
+                touch_count: lead.touch_count,
+                lead_status: lead.lead_status,
+                priority_score: lead.priority_score,
+            }
+        });
+    } catch (e) {
+        console.error("Failed to update Lead in Postgres:", e);
     }
-
-    const oAuth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        `${process.env.NEXTAUTH_URL}/api/auth/google/callback`
-    );
-
-    oAuth2Client.setCredentials({ refresh_token: config.value });
-    return oAuth2Client;
-};
-
-const getSheets = async () => google.sheets({ version: 'v4', auth: await getAuth() });
-
-const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
-
-export async function getCallQueue(): Promise<{ leads: Lead[], metadata: any }> {
-    // If missing env vars, fail gracefully in dev or throw explicitly
-    if (!SPREADSHEET_ID) {
-        console.warn("SPREADSHEET_ID is missing");
-        return { leads: [], metadata: { total: 0 } };
-    }
-    const sheets = await getSheets();
-    const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Call_Queue!A2:R',
-    });
-
-    const rows = response.data.values || [];
-
-    const leads: Lead[] = rows.map((row, index) => {
-        return {
-            _rowIndex: index + 2, // 1-based, plus header
-            lead_identity: row[0] || '',
-            assignment_info: row[1] || '',
-            call_outcome: row[2] as any || null,
-            doctor_type: row[3] as any || null,
-            interest_level: row[4] ? parseInt(row[4]) as any : null,
-            call_notes: row[5] || '',
-            next_action_type: row[6] as any || null,
-            whatsapp_details_sent: row[7] === 'TRUE',
-            next_action_date: row[8] || '',
-            last_call_date: row[9] || '',
-            touch_count: parseInt(row[10] || '0', 10),
-            meeting_status: row[11] as any || null,
-            meeting_date: row[12] || '',
-            meeting_time: row[13] || '',
-            lead_status: row[14] as any || 'Active',
-            priority_score: parseInt(row[15] || '0', 10),
-            locked_by: row[16] || null,
-            locked_at: row[17] || null,
-        };
-    });
-
-    return { leads, metadata: { total: rows.length } };
 }
 
-export async function updateLeadRow(rowIndex: number, lead: Lead) {
-    if (!SPREADSHEET_ID) return;
-    const sheets = await getSheets();
-    const values = [
-        [
-            lead.lead_identity,
-            lead.assignment_info,
-            lead.call_outcome || '',
-            lead.doctor_type || '',
-            lead.interest_level || '',
-            lead.call_notes || '',
-            lead.next_action_type || '',
-            lead.whatsapp_details_sent ? 'TRUE' : 'FALSE',
-            lead.next_action_date || '',
-            lead.last_call_date || '',
-            lead.touch_count.toString(),
-            lead.meeting_status || '',
-            lead.meeting_date || '',
-            lead.meeting_time || '',
-            lead.lead_status,
-            lead.priority_score.toString(),
-            lead.locked_by || '',
-            lead.locked_at || '',
-        ]
-    ];
-
-    await sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
-        range: `Call_Queue!A${rowIndex}:R${rowIndex}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values }
-    });
+// Hard Delete Lead from DB
+export async function deleteLeadRow(rowIndex: string) {
+    try {
+        await prisma.lead.delete({
+            where: { id: rowIndex }
+        });
+    } catch (e) {
+        console.error("Failed to delete Lead from Postgres:", e);
+    }
 }
 
 export async function appendToMeetings(lead: Lead, bookedBy: string) {
-    if (!SPREADSHEET_ID) return;
-    const sheets = await getSheets();
-    const values = [
-        [
-            lead.lead_identity,
-            lead.meeting_date || '',
-            lead.meeting_time || '',
-            lead.meeting_status || '',
-            bookedBy
-        ]
-    ];
+    try {
+        await prisma.meeting.create({
+            data: {
+                lead_id: lead._rowIndex as string,
+                meeting_date: lead.meeting_date || '',
+                meeting_time: lead.meeting_time || '',
+                meeting_status: lead.meeting_status || 'Scheduled',
+                booked_by: bookedBy
+            }
+        });
 
-    await sheets.spreadsheets.values.append({
-        spreadsheetId: SPREADSHEET_ID,
-        range: 'Meetings!A:E',
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values }
-    });
+        // Ensure the Lead status is also upgraded
+        await prisma.lead.update({
+            where: { id: lead._rowIndex as string },
+            data: { lead_status: 'Meeting Booked' }
+        })
+    } catch (e) {
+        console.error("Failed to append meeting to Postgres:", e);
+    }
 }
 
 export interface MeetingRow {
@@ -133,25 +93,21 @@ export interface MeetingRow {
 }
 
 export async function getMeetings(): Promise<MeetingRow[]> {
-    if (!SPREADSHEET_ID) return [];
-
     try {
-        const sheets = await getSheets();
-        const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: SPREADSHEET_ID,
-            range: 'Meetings!A2:E',
+        const meetings = await prisma.meeting.findMany({
+            include: { lead: true },
+            orderBy: { meeting_date: 'asc' }
         });
 
-        const rows = response.data.values || [];
-        return rows.map(row => ({
-            lead_identity: row[0] || '',
-            meeting_date: row[1] || '',
-            meeting_time: row[2] || '',
-            meeting_status: row[3] || '',
-            booked_by: row[4] || '',
+        return meetings.map(m => ({
+            lead_identity: m.lead.lead_identity,
+            meeting_date: m.meeting_date,
+            meeting_time: m.meeting_time,
+            meeting_status: m.meeting_status,
+            booked_by: m.booked_by,
         }));
     } catch (e) {
-        console.error("Error fetching meetings:", e);
+        console.error("Error fetching Postgres meetings:", e);
         return [];
     }
 }

@@ -7,7 +7,7 @@ export async function POST(req: Request) {
     try {
         const payload = await req.json() as CallLogPayload;
 
-        if (!payload.lead_identity || !payload.outcome) {
+        if (!payload.lead_id || !payload.outcome) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
         }
 

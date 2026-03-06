@@ -6,7 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "postgres"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -28,5 +29,51 @@ enum Role {
 model SystemConfig {
   key       String   @id
   value     String
+  updatedAt DateTime @updatedAt
+}
+
+model Lead {
+  id              String  @id @default(uuid())
+  lead_identity   String // Clinic - Location - Phone
+  assignment_info String // City/Manager assignment
+  lead_type       String? // New / Hot / Nurture / Cold
+
+  // Call Qualification
+  call_outcome   String?
+  doctor_type    String?
+  interest_level Int?
+  call_notes     String?
+
+  // Automated Follow-Ups
+  next_action_type      String? @default("New")
+  whatsapp_details_sent Boolean @default(false)
+  next_action_date      String? // Formatted YYYY-MM-DD
+  last_call_date        String?
+  touch_count           Int     @default(0)
+
+  // State Management
+  lead_status    String @default("Active") // Active, Meeting Booked, Disqualified
+  priority_score Int    @default(0)
+
+  // Relations
+  meetings Meeting[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Meeting {
+  id      String @id @default(uuid())
+  lead_id String
+  lead    Lead   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
+
+  meeting_date   String
+  meeting_time   String
+  meeting_status String  @default("Scheduled") // Scheduled, Completed, No Show, Rescheduled, Cancelled
+  booked_by      String // SDR name/email who booked it
+  meeting_notes  String?
+  no_show        Boolean @default(false)
+
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

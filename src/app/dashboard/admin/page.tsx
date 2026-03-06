@@ -18,31 +18,22 @@ export default function AdminDashboard() {
     const [uploading, setUploading] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
 
+    // Manual Entry State
+    const [addingManual, setAddingManual] = useState(false);
+    const [manualClinicName, setManualClinicName] = useState('');
+    const [manualPhoneNumber, setManualPhoneNumber] = useState('');
+    const [manualCity, setManualCity] = useState('');
+    const [manualLeadType, setManualLeadType] = useState('');
+
     // Wait for auth resolution
     if (status === 'loading') return <div className="p-12 text-center text-slate-500">Loading admin controls...</div>;
 
-    if (!session || (session as any).role !== 'ADMIN') {
-        redirect('/queue');
+    // Removed the role check entirely, now anyone logged in can set up the system.
+    if (!session) {
+        redirect('/login');
     }
 
-    const generateSystemSheet = async () => {
-        setGenerating(true);
-        try {
-            const res = await fetch('/api/sheets/create', { method: 'POST' });
-            const data = await res.json();
-
-            if (res.ok) {
-                toast.success('System Spreadsheet Generated!');
-                setSheetUrl(data.url);
-            } else {
-                toast.error(data.error || 'Failed to generate spreadsheet');
-            }
-        } catch (e) {
-            toast.error('Network error during connection');
-        } finally {
-            setGenerating(false);
-        }
-    };
+    // Logic for obsolete generateSystemSheet removed
 
     const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -103,20 +94,62 @@ export default function AdminDashboard() {
         });
     };
 
+    const handleManualSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!manualClinicName || !manualPhoneNumber || !manualCity) {
+            toast.error("Please fill in all required fields.");
+            return;
+        }
+
+        setAddingManual(true);
+        try {
+            const newLead = {
+                clinicName: manualClinicName,
+                phoneNumber: manualPhoneNumber,
+                city: manualCity,
+                leadType: manualLeadType
+            };
+
+            const res = await fetch('/api/leads/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leads: [newLead] })
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                toast.success("Lead added successfully!");
+                // Reset form
+                setManualClinicName('');
+                setManualPhoneNumber('');
+                setManualCity('');
+                setManualLeadType('');
+            } else {
+                toast.error(data.error || 'Failed to add lead');
+            }
+        } catch (err) {
+            console.error("Manual add error:", err);
+            toast.error("An error occurred while adding the lead");
+        } finally {
+            setAddingManual(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
             <div className="max-w-6xl mx-auto space-y-6">
                 <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Admin Controls</h1>
-                        <p className="text-slate-500 text-sm">System configuration and ingestion</p>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">System Setup</h1>
+                        <p className="text-slate-500 text-sm">Sheet configuration and data ingestion</p>
                     </div>
                     <div className="flex gap-4">
-                        <Link href="/dashboard/manager">
-                            <Button variant="outline">Manager View</Button>
+                        <Link href="/meetings">
+                            <Button variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200">View Meetings Booked</Button>
                         </Link>
                         <Link href="/queue">
-                            <Button variant="outline">SDR Queue View</Button>
+                            <Button variant="outline" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200">Return to CRM Table</Button>
                         </Link>
                     </div>
                 </div>
@@ -150,7 +183,7 @@ export default function AdminDashboard() {
                                         <p className="text-sm font-semibold text-indigo-900 dark:text-indigo-300">Fast Ingestion</p>
                                     </div>
                                     <p className="text-xs text-slate-600 dark:text-slate-400">
-                                        Upload a CSV file with columns: <b>Clinic Name</b>, <b>Phone Number</b>, and <b>City</b>. The system will automatically map and append these to your connected Google Sheet.
+                                        Upload a CSV file with columns: <b>Clinic Name</b>, <b>Phone Number</b>, and <b>City</b>. The system will automatically map and parse these directly into the internal PostgreSQL database.
                                     </p>
 
                                     <input
@@ -172,76 +205,54 @@ export default function AdminDashboard() {
                             </div>
 
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
-                                <h4 className="font-semibold text-sm">Don't have a configured sheet yet?</h4>
-                                <p className="text-xs text-slate-500">
-                                    Click below to automatically generate a brand new Google Spreadsheet containing the exact architecture required by the system.
-                                </p>
-
-                                {sheetUrl ? (
-                                    <div className="space-y-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-900/50 rounded-lg">
-                                        <p className="text-sm font-semibold text-green-800 dark:text-green-300">Sheet Generated Successfully!</p>
-                                        <Button className="w-full bg-green-600 hover:bg-green-700" asChild>
-                                            <a href={sheetUrl} target="_blank" rel="noopener noreferrer">
-                                                Open New System Sheet <ExternalLink className="ml-2 h-4 w-4" />
-                                            </a>
-                                        </Button>
-                                        <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
-                                            <strong>Important:</strong> Copy the long ID from the URL above and save it as your <code>SPREADSHEET_ID</code> in the `.env` file to link it to the backend forever.
-                                        </p>
+                                <h4 className="font-semibold text-sm">Add Lead Manually</h4>
+                                <form onSubmit={handleManualSubmit} className="space-y-3 p-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <PlusCircle className="h-4 w-4 text-slate-600" />
+                                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-300">Single Entry</p>
                                     </div>
-                                ) : (
+                                    <div className="space-y-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Clinic Name *"
+                                            value={manualClinicName}
+                                            onChange={(e) => setManualClinicName(e.target.value)}
+                                            className="text-sm border p-2 rounded w-full bg-white dark:bg-slate-950"
+                                            required
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Phone Number *"
+                                            value={manualPhoneNumber}
+                                            onChange={(e) => setManualPhoneNumber(e.target.value)}
+                                            className="text-sm border p-2 rounded w-full bg-white dark:bg-slate-950"
+                                            required
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="City *"
+                                            value={manualCity}
+                                            onChange={(e) => setManualCity(e.target.value)}
+                                            className="text-sm border p-2 rounded w-full bg-white dark:bg-slate-950"
+                                            required
+                                        />
+                                        <input
+                                            type="text"
+                                            placeholder="Lead Type (e.g., Hot, Cold)"
+                                            value={manualLeadType}
+                                            onChange={(e) => setManualLeadType(e.target.value)}
+                                            className="text-sm border p-2 rounded w-full bg-white dark:bg-slate-950"
+                                        />
+                                    </div>
                                     <Button
-                                        className="w-full gap-2"
-                                        onClick={generateSystemSheet}
-                                        disabled={generating}
+                                        type="submit"
+                                        className="w-full mt-2"
+                                        disabled={addingManual}
                                     >
-                                        {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
-                                        {generating ? 'Generating Sheet structure...' : 'Generate New System Sheet'}
+                                        {addingManual ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
+                                        {addingManual ? 'Adding...' : 'Add Lead'}
                                     </Button>
-                                )}
-                            </div>
-
-                            <div className="pt-2">
-                                <Button className="w-full gap-2" variant="outline" asChild>
-                                    <a href={`https://docs.google.com/spreadsheets/d/${process.env.NEXT_PUBLIC_SPREADSHEET_ID || ''}`} target="_blank" rel="noopener noreferrer">
-                                        Open Current Connected Sheet <ExternalLink className="h-4 w-4" />
-                                    </a>
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Google OAuth System</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p className="text-sm text-slate-600 dark:text-slate-400">
-                                This system requires a linked Google Account to read/write from <b>Google Sheets</b>.
-                                Since Service Account Private Keys are blocked by organizational policy, you must authorize your personal or workspace Google Account below.
-                            </p>
-
-                            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oauth') === 'success' && (
-                                <div className="p-3 mb-2 bg-green-50 text-green-700 border border-green-200 rounded-md text-sm font-medium">
-                                    Google Account linked successfully! System is now running.
-                                </div>
-                            )}
-
-                            {typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('error') && (
-                                <div className="p-3 mb-2 bg-red-50 text-red-700 border border-red-200 rounded-md text-sm font-medium">
-                                    OAuth Error: {new URLSearchParams(window.location.search).get('error')}
-                                </div>
-                            )}
-
-                            <Button className="w-full bg-blue-600 hover:bg-blue-700 gap-2" asChild>
-                                <a href="/api/auth/google">Link Google Account (OAuth)</a>
-                            </Button>
-
-                            <div className="text-xs text-slate-500 mt-2 space-y-1 bg-slate-100 p-3 rounded">
-                                <p><strong>Required setup before clicking:</strong></p>
-                                <li>Ensure `GOOGLE_CLIENT_ID` is in `.env`</li>
-                                <li>Ensure `GOOGLE_CLIENT_SECRET` is in `.env`</li>
-                                <li>Redirect URI in GCP must be EXACTLY: <br /><code>{process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/google/callback</code></li>
+                                </form>
                             </div>
                         </CardContent>
                     </Card>

@@ -52,11 +52,7 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
             if (interest === 3) {
                 updatedLead.next_action_type = 'Whatsapp details';
                 updatedLead.whatsapp_details_sent = payload.whatsappDetailsSent || false;
-
-                // Touch increments only when whatsapp_details_sent == true
-                if (updatedLead.whatsapp_details_sent) {
-                    updatedLead.touch_count += 1;
-                }
+                updatedLead.touch_count += 1; // Unconditional increment per flowchart rules
             } else if (interest === 4) {
                 updatedLead.next_action_type = 'Call follow up';
                 updatedLead.touch_count += 1;
@@ -104,7 +100,11 @@ export function calculatePriorityScore(lead: Lead): number {
     const interestLevel = lead.interest_level || 0; // if null, 0
 
     // priority_score = (Overdue_Flag * 100) + (Interest_Level * 10) - Days_Until_Action
-    const priorityScore = (overdueFlag * 100) + (interestLevel * 10) - daysUntilAction;
+    let priorityScore = (overdueFlag * 100) + (interestLevel * 10) - daysUntilAction;
+
+    // A future date without an interest level might naturally compute to a negative number (e.g. 0 + 0 - 1 = -1).
+    // Let's clamp it to a minimum of 0 so it reads cleaner in the UI.
+    if (priorityScore < 0) priorityScore = 0;
 
     return priorityScore;
 }

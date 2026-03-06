@@ -25,7 +25,8 @@ export type NextActionType =
     | 'Reattempt';
 
 export interface Lead {
-    lead_identity: string; // UUID
+    _rowIndex?: string; // Prisma Database UUID acting as the index
+    lead_identity: string;
     assignment_info: string;
 
     // Call Qualification
@@ -54,11 +55,12 @@ export interface Lead {
 }
 
 export interface CallLogPayload {
+    lead_id: string; // The primary UUID from PostgreSQL
     lead_identity: string;
     outcome: CallOutcome;
     doctorType?: DoctorType;
     interestLevel?: InterestLevel;
-    notes?: string;
+    notes: string; // Mandatory piece of logic
     whatsappDetailsSent?: boolean;
     meetingDate?: string;
     meetingTime?: string;
