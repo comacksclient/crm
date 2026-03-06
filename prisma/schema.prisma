@@ -16,8 +16,29 @@ model User {
   name      String?
   image     String?
   role      Role     @default(SDR)
+  team_id   String? // The explicit corporate team this user was assigned to
+  team      Team?    @relation(fields: [team_id], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Team {
+  id        String       @id @default(uuid())
+  name      String       @unique // e.g. "Alpha Squad"
+  users     User[] // Members in this team
+  leads     Lead[] // Loads delegated to this team
+  invites   TeamInvite[] // Outstanding invite links for this team
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model TeamInvite {
+  id        String   @id @default(uuid())
+  team_id   String
+  team      Team     @relation(fields: [team_id], references: [id], onDelete: Cascade)
+  createdBy String // ID of the Manager/Admin who generated this link
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 enum Role {
@@ -56,7 +77,11 @@ model Lead {
   priority_score Int    @default(0)
 
   // Relations
-  meetings Meeting[]
+  team_id    String? // The high-level Team (e.g. "Alpha Squad") assigned to work these leads
+  team       Team?     @relation(fields: [team_id], references: [id])
+  manager_id String? // Manager who actively checked up on or routed this lead
+  sdr_id     String? // The explicitly assigned caller who must execute the call
+  meetings   Meeting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

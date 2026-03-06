@@ -145,6 +145,12 @@ export default function AdminDashboard() {
                         <p className="text-slate-500 text-sm">Sheet configuration and data ingestion</p>
                     </div>
                     <div className="flex gap-4">
+                        <Link href="/dashboard/admin/users">
+                            <Button variant="outline" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">Manage Teams & Users</Button>
+                        </Link>
+                        <Link href="/dashboard/admin/delegation">
+                            <Button variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">Delegate Leads to Teams</Button>
+                        </Link>
                         <Link href="/meetings">
                             <Button variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200">View Meetings Booked</Button>
                         </Link>
