@@ -48,10 +48,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
             return true;
         },
-        async jwt({ token, user }) {
+        async jwt({ token, account }) {
+            // Only fetch from DB if we are running in the Node.js runtime (avoids Edge middleware crashes)
+            if (process.env.NEXT_RUNTIME === 'nodejs' && token.email) {
+                try {
+                    const dbUser = await prisma.user.findUnique({
+                        where: { email: token.email },
+                        select: { role: true, team_id: true }
+                    });
+                    if (dbUser) {
+                        token.role = dbUser.role;
+                        token.team_id = dbUser.team_id;
+                    }
+                } catch (e) {
+                    // Fail silently so auth doesn't completely break if DB is down during session check
+                }
+            } else if (account && token.email) {
+                // First login fallback if triggered from an edge edge case
+                token.role = 'SDR';
+            }
             return token;
         },
         async session({ session, token }) {
+            if (session.user) {
+                // @ts-ignore
+                session.user.role = token.role || 'SDR';
+                // @ts-ignore
+                session.user.team_id = token.team_id || null;
+            }
             return session;
         }
     }

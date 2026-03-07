@@ -35,13 +35,14 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
         const menu = [
             { name: 'Call Engine (CRM)', href: '/queue', icon: PhoneCall },
             { name: 'Booked Meetings', href: '/meetings', icon: CalendarDays },
+            { name: 'My Team', href: '/team', icon: Users },
         ];
 
         // Role-specific items
         if (user.role === 'ADMIN') {
             menu.unshift({ name: 'System Setup', href: '/dashboard/admin', icon: Settings });
             menu.unshift({ name: 'Lead Delegation', href: '/dashboard/admin/delegation', icon: Target });
-            menu.unshift({ name: 'Team Control', href: '/dashboard/admin/users', icon: Users });
+            menu.unshift({ name: 'Global Roster', href: '/dashboard/admin/users', icon: Briefcase });
         } else if (user.role === 'MANAGER') {
             menu.unshift({ name: 'Team Engine', href: '/dashboard/manager', icon: Briefcase });
         }

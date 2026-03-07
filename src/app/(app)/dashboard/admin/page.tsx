@@ -42,9 +42,25 @@ export default function AdminDashboard() {
     // Wait for auth resolution
     if (status === 'loading') return <div className="p-12 text-center text-slate-500">Loading admin controls...</div>;
 
-    // Removed the role check entirely, now anyone logged in can set up the system.
     if (!session) {
         redirect('/login');
+    }
+
+    if (profile && profile.role !== 'ADMIN') {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 flex items-center justify-center">
+                <Card className="max-w-md w-full shadow-sm border-rose-200 dark:border-rose-900/50 bg-rose-50/50 dark:bg-rose-950/20 text-center p-8">
+                    <ShieldCheck className="h-16 w-16 mx-auto text-rose-500 mb-4" />
+                    <h2 className="text-xl font-bold text-rose-900 dark:text-rose-100 mb-2">Access Restricted</h2>
+                    <p className="text-sm text-rose-700 dark:text-rose-300 mb-6">
+                        System Setup, CSV ingestion, and Database Exports are strictly restricted to Administrators. Your current role is {profile.role}.
+                    </p>
+                    <Link href="/queue">
+                        <Button className="w-full bg-slate-900 hover:bg-slate-800 text-white">Return to safe zone</Button>
+                    </Link>
+                </Card>
+            </div>
+        );
     }
 
     // Logic for obsolete generateSystemSheet removed
@@ -231,21 +247,6 @@ export default function AdminDashboard() {
                             <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 border-emerald-200">{profile?.teamName || '...'}</Badge>
                         </div>
                     </div>
-                </div>
-
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex gap-4 overflow-x-auto">
-                    <Link href="/dashboard/admin/users">
-                        <Button variant="outline" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 whitespace-nowrap">Manage Teams & Users</Button>
-                    </Link>
-                    <Link href="/dashboard/admin/delegation">
-                        <Button variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200 whitespace-nowrap">Delegate Leads to Teams</Button>
-                    </Link>
-                    <Link href="/meetings">
-                        <Button variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200 whitespace-nowrap">View Meetings Booked</Button>
-                    </Link>
-                    <Link href="/queue">
-                        <Button variant="outline" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 whitespace-nowrap">Return to CRM Table</Button>
-                    </Link>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

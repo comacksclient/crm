@@ -1,7 +1,6 @@
 import { PrismaClient, Lead as PrismaLead, Meeting as PrismaMeeting } from '@prisma/client';
 import { Lead } from './types';
-
-const prisma = new PrismaClient();
+import prisma from '@/lib/prisma';
 
 // Map Prisma DB Model to Frontend Lead Interface
 export const mapPrismaToLead = (dbLead: any): Lead => ({

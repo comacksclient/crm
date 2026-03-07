@@ -129,17 +129,6 @@ export default function QueuePage() {
                         </h1>
                         <p className="text-sm text-slate-500">View and log interactions for your assigned leads. Sorted by priority.</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Button variant="outline" onClick={() => window.location.href = '/meetings'} className="gap-2 text-green-600 border-green-200 hover:bg-green-50">
-                            Booked Meetings
-                        </Button>
-                        <Button variant="outline" onClick={() => window.location.href = '/dashboard/admin'} className="gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                            Setup & Uploads
-                        </Button>
-                        <Button variant="outline" onClick={() => signOut({ callbackUrl: '/login' })} className="gap-2">
-                            <LogOut className="h-4 w-4" /> Sign Out
-                        </Button>
-                    </div>
                 </div>
 
                 {/* Data Table */}

@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, ArrowRightCircle, CheckSquare, Square, ArrowLeft, UserCircle2 } from 'lucide-react';
+import { Loader2, ArrowRightCircle, CheckSquare, Square, ArrowLeft, UserCircle2, Zap } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 
 interface UnassignedLead {
@@ -32,6 +34,10 @@ export default function AdminDelegationDesk() {
     const [selectedTeam, setSelectedTeam] = useState<string>('');
     const [assigning, setAssigning] = useState(false);
     const [profile, setProfile] = useState<{ role: string, teamName: string } | null>(null);
+
+    const [showDistributeModal, setShowDistributeModal] = useState(false);
+    const [distributeCount, setDistributeCount] = useState('100');
+    const [distributing, setDistributing] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -126,6 +132,42 @@ export default function AdminDelegationDesk() {
         }
     };
 
+    const handleDistribute = async () => {
+        if (!selectedTeam) {
+            toast.error("Please select a Target Team first to distribute leads into.");
+            return;
+        }
+
+        const count = parseInt(distributeCount);
+        if (isNaN(count) || count <= 0) {
+            toast.error("Please enter a valid number of leads per SDR.");
+            return;
+        }
+
+        setDistributing(true);
+        try {
+            const res = await fetch('/api/leads/distribute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ perSdrCount: count, teamId: selectedTeam })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message);
+                setShowDistributeModal(false);
+                fetchData();
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to distribute leads');
+            }
+        } catch (e) {
+            toast.error('Network error during lead distribution');
+        } finally {
+            setDistributing(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 relative">
             <div className="max-w-7xl mx-auto space-y-6">
@@ -148,14 +190,6 @@ export default function AdminDelegationDesk() {
                             <Badge variant="outline" className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 border-indigo-200 capitalize">{profile?.role.toLowerCase() || '...'}</Badge>
                         </div>
                     </div>
-                </div>
-
-                <div className="flex items-center gap-3">
-                    <Link href="/dashboard/admin">
-                        <Button variant="outline" className="gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                            <ArrowLeft className="h-4 w-4" /> Back to Setup
-                        </Button>
-                    </Link>
                 </div>
 
                 {/* Delegation Control Bar */}
@@ -190,6 +224,15 @@ export default function AdminDelegationDesk() {
                                 )}
                             </SelectContent>
                         </Select>
+
+                        <Button
+                            onClick={() => setShowDistributeModal(true)}
+                            variant="outline"
+                            className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 gap-2"
+                        >
+                            <Zap className="h-4 w-4 fill-amber-500" />
+                            Turbo Distribute
+                        </Button>
 
                         <Button
                             onClick={handleDelegate}
@@ -262,6 +305,51 @@ export default function AdminDelegationDesk() {
                     </div>
                 </Card>
             </div>
+
+            {/* Distribute Modal */}
+            {showDistributeModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+                        <div>
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <Zap className="h-5 w-5 text-amber-500 fill-amber-500" />
+                                Turbo Distribute Leads
+                            </h2>
+                            <p className="text-sm text-slate-500 mt-1">
+                                Automatically pull unassigned leads matching team <b>{teams.find(t => t.id === selectedTeam)?.name || 'Unknown'}</b> and distribute them evenly across its SDRs.
+                            </p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="dist-count">Leads per SDR</Label>
+                                <Input
+                                    id="dist-count"
+                                    type="number"
+                                    value={distributeCount}
+                                    onChange={(e) => setDistributeCount(e.target.value)}
+                                    placeholder="e.g. 100"
+                                />
+                                <p className="text-[10px] text-slate-400">If the team has 5 SDRs and you enter 100, the top 500 leads will be assigned.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-2">
+                            <Button variant="outline" onClick={() => setShowDistributeModal(false)} disabled={distributing}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleDistribute}
+                                disabled={distributing || !distributeCount || !selectedTeam}
+                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                            >
+                                {distributing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
+                                Distribute Now
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

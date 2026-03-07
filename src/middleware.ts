@@ -25,13 +25,13 @@ export async function middleware(request: NextRequest) {
 
     const role = (session.user as any).role;
 
-    // Basic Role Based Access Checks (Bypassed temporarily for testing CRM Table System)
-    // if (pathname.startsWith('/dashboard/admin') && role !== 'ADMIN') {
-    //     return NextResponse.redirect(new URL('/queue', request.url));
-    // }
-    // if (pathname.startsWith('/dashboard/manager') && role !== 'MANAGER' && role !== 'ADMIN') {
-    //     return NextResponse.redirect(new URL('/queue', request.url));
-    // }
+    // Role Based Access Checks
+    if (pathname.startsWith('/dashboard/admin') && role !== 'ADMIN') {
+        return NextResponse.redirect(new URL('/queue', request.url));
+    }
+    if (pathname.startsWith('/dashboard/manager') && role !== 'MANAGER' && role !== 'ADMIN') {
+        return NextResponse.redirect(new URL('/queue', request.url));
+    }
 
     return NextResponse.next();
 }

@@ -1,9 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { updateLeadRow, appendToMeetings, deleteLeadRow, mapPrismaToLead } from './googleSheets';
 import { calculatePriorityScore, runActionEngine } from './actionEngine';
 import { CallLogPayload, Lead } from './types';
 
-const prisma = new PrismaClient();
+
 
 export async function logCallOutcome(payload: CallLogPayload, userEmail: string) {
     const dbLead = await prisma.lead.findUnique({

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { PrismaClient } from '@prisma/client';
+import prisma from '@/lib/prisma';
 import { calculatePriorityScore } from '@/lib/actionEngine';
 import { mapPrismaToLead } from '@/lib/googleSheets';
 
-const prisma = new PrismaClient();
+
 
 export async function GET() {
     try {

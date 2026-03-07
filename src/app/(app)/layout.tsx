@@ -1,5 +1,5 @@
 import { auth } from '@/auth';
-import AppLayout from '@/components/layout/AppLayout';
+import AppLayout from '../../components/layout/AppLayout';
 import { redirect } from 'next/navigation';
 
 export default async function AuthenticatedLayout({
