@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2, ExternalLink, PlusCircle, UploadCloud, FileSpreadsheet, Download, ShieldCheck, UserCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -31,13 +31,13 @@ export default function AdminDashboard() {
 
     const [exporting, setExporting] = useState(false);
 
-    useState(() => {
+    useEffect(() => {
         fetch('/api/auth/me')
             .then(r => r.json())
             .then(data => {
                 if (data.user) setProfile({ role: data.user.role, teamName: data.user.teamName });
             });
-    });
+    }, []);
 
     // Wait for auth resolution
     if (status === 'loading') return <div className="p-12 text-center text-slate-500">Loading admin controls...</div>;
@@ -166,16 +166,16 @@ export default function AdminDashboard() {
         }
     };
 
-    const handleExportPDF = async () => {
+    const handleExportPDF = async (type: 'leads' | 'meetings') => {
         setExporting(true);
         try {
-            const res = await fetch('/api/admin/export');
+            const res = await fetch(`/api/admin/export?type=${type}`);
             if (res.ok) {
                 const data = await res.json();
-                const leads = data.leads;
+                const records = data.data;
 
-                if (!leads || leads.length === 0) {
-                    toast.error("No leads available in the database to export.");
+                if (!records || records.length === 0) {
+                    toast.error(`No ${type} available in the database to export.`);
                     setExporting(false);
                     return;
                 }
@@ -185,25 +185,18 @@ export default function AdminDashboard() {
 
                 // Set Title
                 doc.setFontSize(18);
-                doc.text('CRM Lead Pipeline Database Export', 14, 22);
+                const title = type === 'leads' ? 'CRM Lead Pipeline Database Export' : 'CRM Booked Meetings Database Export';
+                doc.text(title, 14, 22);
                 doc.setFontSize(11);
                 doc.setTextColor(100);
                 doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
-                doc.text(`Total Active/Disqualified Records: ${data.total}`, 14, 36);
+                doc.text(`Total Records: ${data.total}`, 14, 36);
 
-                // Setup Table Headers and Body
-                const tableColumn = ["Identity", "City", "Status", "Priority", "Touches", "Outcome", "Action Date", "Team", "Caller"];
-                const tableRows = leads.map((lead: any) => [
-                    lead.Identity,
-                    lead.City,
-                    lead.Status,
-                    lead.Priority.toString(),
-                    lead.Touches.toString(),
-                    lead.Outcome,
-                    lead["Action Date"],
-                    lead.Team,
-                    lead.Caller
-                ]);
+                // Setup Dynamic Table Headers and Body
+                const tableColumn = Object.keys(records[0]);
+                const tableRows = records.map((record: any) =>
+                    Object.values(record).map(val => String(val !== null && val !== undefined ? val : 'N/A'))
+                );
 
                 // Generate table
                 autoTable(doc, {
@@ -216,8 +209,8 @@ export default function AdminDashboard() {
                 });
 
                 // Download locally
-                doc.save(`CRM_Lead_Export_${new Date().toISOString().split('T')[0]}.pdf`);
-                toast.success('Database fully exported alongside relational graphs as a PDF document!');
+                doc.save(`CRM_${type}_Export_${new Date().toISOString().split('T')[0]}.pdf`);
+                toast.success(`${type === 'leads' ? 'Leads' : 'Meetings'} exported as a formatted PDF document!`);
 
             } else {
                 toast.error("You are not authorized to export the master database.");
@@ -253,22 +246,12 @@ export default function AdminDashboard() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Lead Ingestion Engine</CardTitle>
-                            <CardDescription>Instructions for importing Leads into the Outbound system.</CardDescription>
+                            <CardDescription>Upload structured data natively into the PostgreSQL database.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <p className="text-sm text-slate-600 dark:text-slate-400">
-                                The system reads directly from the connected Google Sheet. To ingest leads, open your Google Sheet and paste rows directly into the <strong>Call_Queue</strong> sheet.
+                                The system reads standard CSV files. To ingest leads, drag and drop an exported file containing your corporate contacts. The CRM will automatically format and normalize tracking columns globally.
                             </p>
-                            <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-md">
-                                <h4 className="font-semibold text-sm mb-2">Required Columns Map:</h4>
-                                <ul className="text-xs space-y-1 text-slate-600 dark:text-slate-400 font-mono">
-                                    <li>A: lead_identity (UUID mapping)</li>
-                                    <li>B: assignment_info (Manager/City)</li>
-                                    <li>C - F: Leave blank (Filled by SDRs)</li>
-                                    <li>G - N: Leave blank (Auto computed)</li>
-                                    <li>O: lead_status (Set to &ldquo;Active&rdquo;)</li>
-                                </ul>
-                            </div>
 
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
                                 <h4 className="font-semibold text-sm">Upload Leads via CSV</h4>
@@ -368,16 +351,27 @@ export default function AdminDashboard() {
                             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
                                 <div>
                                     <h4 className="font-semibold text-sm">Database Export</h4>
-                                    <p className="text-xs text-slate-500 mt-1 mb-3">Download a structured PDF of the entire CRM including relational Team/Caller maps and calculated Action metrics.</p>
+                                    <p className="text-xs text-slate-500 mt-1 mb-3">Download structured PDFs for different segments of the CRM.</p>
                                 </div>
-                                <Button
-                                    onClick={handleExportPDF}
-                                    disabled={exporting}
-                                    className="w-full bg-slate-900 hover:bg-slate-800 text-white gap-2"
-                                >
-                                    {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                                    {exporting ? "Compiling PDF..." : "Export Lead Database (PDF)"}
-                                </Button>
+                                <div className="space-y-3">
+                                    <Button
+                                        onClick={() => handleExportPDF('leads')}
+                                        disabled={exporting}
+                                        className="w-full bg-slate-900 hover:bg-slate-800 text-white gap-2"
+                                    >
+                                        {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                        {exporting ? "Compiling PDF..." : "Export Final Leads (PDF)"}
+                                    </Button>
+
+                                    <Button
+                                        onClick={() => handleExportPDF('meetings')}
+                                        disabled={exporting}
+                                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+                                    >
+                                        {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                        {exporting ? "Compiling PDF..." : "Export Booked Meetings (PDF)"}
+                                    </Button>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

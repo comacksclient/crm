@@ -18,8 +18,8 @@ export async function logCallOutcome(payload: CallLogPayload, userEmail: string)
     const updatedLead = runActionEngine(targetLead, payload);
     updatedLead.priority_score = calculatePriorityScore(updatedLead);
 
-    // If the rules engine marks the lead as Disqualified, purge it from the DB
-    if (updatedLead.lead_status === 'Disqualified') {
+    // If the rules engine marks the lead as Disqualified or Inactive, purge it from the DB
+    if (updatedLead.lead_status === 'Disqualified' || updatedLead.lead_status === 'Inactive') {
         await deleteLeadRow(targetLead._rowIndex as string);
     } else {
         // Update Database Lead

@@ -21,7 +21,7 @@ export async function POST(req: Request) {
         // 1. Identify the Manager and their Team
         const dbUser = await prisma.user.findUnique({
             where: { email: session.user.email as string },
-            select: { id: true, role: true, team_id: true }
+            select: { id: true, role: true, team_id: true, name: true, email: true }
         });
 
         if (!dbUser || (dbUser.role !== 'MANAGER' && dbUser.role !== 'ADMIN')) {
@@ -86,7 +86,9 @@ export async function POST(req: Request) {
                         data: {
                             sdr_id: sdr.id,
                             team_id: targetTeamId,
-                            manager_id: dbUser.id
+                            manager_id: dbUser.id,
+                            assigned_to: dbUser.name || dbUser.email,
+                            assigned_date: new Date().toISOString()
                         }
                     });
                     assignedCount += sdrLeads.length;

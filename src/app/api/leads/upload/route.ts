@@ -26,6 +26,12 @@ export async function POST(req: Request) {
             return {
                 lead_identity: leadIdentity,
                 assignment_info: assignmentInfo,
+
+                // Explicit Lead Identity Matrix
+                clinic_name: lead.clinicName || null,
+                phone_number: lead.phoneNumber || null,
+                city: lead.city || null,
+
                 lead_type: lead.leadType || 'New',
                 lead_status: 'Active',
                 touch_count: 0,

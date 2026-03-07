@@ -33,6 +33,7 @@ export default function ManagerDashboard() {
     const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
     const [selectedSdr, setSelectedSdr] = useState<string>('');
     const [assigning, setAssigning] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     const [managerTeamId, setManagerTeamId] = useState<string | null>(null);
     const [generatingInvite, setGeneratingInvite] = useState(false);
@@ -129,6 +130,40 @@ export default function ManagerDashboard() {
         }
     };
 
+    const handleDelete = async () => {
+        if (selectedLeads.size === 0) {
+            toast.error("Please select at least one lead to delete.");
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to permanently delete ${selectedLeads.size} leads from the database? This cannot be undone.`)) {
+            return;
+        }
+
+        setDeleting(true);
+        try {
+            const res = await fetch('/api/leads/purge', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leadIds: Array.from(selectedLeads) })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message);
+                setSelectedLeads(new Set());
+                fetchData(); // Refresh queue
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to delete leads');
+            }
+        } catch (e) {
+            toast.error('Network error during bulk deletion');
+        } finally {
+            setDeleting(false);
+        }
+    };
+
     const handleGenerateInvite = async () => {
         // Redacted: Only Admins can invite now
         toast.error('Only Administrators can generate team invitations.');
@@ -210,6 +245,15 @@ export default function ManagerDashboard() {
                     </Select>
 
                     <div className="flex items-center gap-4">
+                        <Button
+                            onClick={handleDelete}
+                            variant="destructive"
+                            disabled={deleting || selectedLeads.size === 0}
+                            className="min-w-[140px]"
+                        >
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Delete Selected
+                        </Button>
                         <Button
                             onClick={handleAssign}
                             disabled={assigning || selectedLeads.size === 0 || !selectedSdr}

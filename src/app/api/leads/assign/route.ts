@@ -12,7 +12,8 @@ export async function POST(req: Request) {
         }
 
         const dbUser = await prisma.user.findUnique({
-            where: { email: session.user.email as string }
+            where: { email: session.user.email as string },
+            select: { id: true, role: true, name: true, email: true }
         });
 
         if (!dbUser || (dbUser.role !== 'MANAGER' && dbUser.role !== 'ADMIN')) {
@@ -34,7 +35,9 @@ export async function POST(req: Request) {
             },
             data: {
                 sdr_id: sdrId,
-                manager_id: dbUser.id
+                manager_id: dbUser.id,
+                assigned_to: dbUser.name || dbUser.email,
+                assigned_date: new Date().toISOString()
             }
         });
 

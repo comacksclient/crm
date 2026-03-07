@@ -54,10 +54,17 @@ model SystemConfig {
 }
 
 model Lead {
-  id              String  @id @default(uuid())
+  id              String @id @default(uuid())
   lead_identity   String // Clinic - Location - Phone
   assignment_info String // City/Manager assignment
-  lead_type       String? // New / Hot / Nurture / Cold
+
+  // Explicit Lead Identity
+  lead_code    String?
+  clinic_name  String?
+  phone_number String?
+  city         String?
+
+  lead_type String? // New / Hot / Nurture / Cold
 
   // Call Qualification
   call_outcome   String?
@@ -73,15 +80,23 @@ model Lead {
   touch_count           Int     @default(0)
 
   // State Management
-  lead_status    String @default("Active") // Active, Meeting Booked, Disqualified
-  priority_score Int    @default(0)
+  lead_status    String  @default("Active") // Active, Meeting Booked, Disqualified
+  priority_score Int     @default(0)
+  overdue        Boolean @default(false)
+
+  // Meeting Booking Fields
+  meeting_status Boolean @default(false)
+  meeting_date   String?
+  meeting_time   String?
 
   // Relations
-  team_id    String? // The high-level Team (e.g. "Alpha Squad") assigned to work these leads
-  team       Team?     @relation(fields: [team_id], references: [id])
-  manager_id String? // Manager who actively checked up on or routed this lead
-  sdr_id     String? // The explicitly assigned caller who must execute the call
-  meetings   Meeting[]
+  team_id       String? // The high-level Team (e.g. "Alpha Squad") assigned to work these leads
+  team          Team?     @relation(fields: [team_id], references: [id])
+  manager_id    String? // Manager who actively checked up on or routed this lead
+  sdr_id        String? // The explicitly assigned caller who must execute the call
+  assigned_to   String? // Text definition of assignment
+  assigned_date String?
+  meetings      Meeting[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -92,12 +107,20 @@ model Meeting {
   lead_id String
   lead    Lead   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
 
+  // Lead Snapshot
+  clinic_name  String?
+  phone_number String?
+
   meeting_date   String
   meeting_time   String
   meeting_status String  @default("Scheduled") // Scheduled, Completed, No Show, Rescheduled, Cancelled
   booked_by      String // SDR name/email who booked it
   meeting_notes  String?
   no_show        Boolean @default(false)
+
+  // Reschedule Tracking
+  rescheduled_from String?
+  rescheduled_to   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

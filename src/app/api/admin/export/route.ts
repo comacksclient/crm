@@ -21,21 +21,10 @@ export async function GET(req: Request) {
             return NextResponse.json({ error: 'Only Administrators can export the Database.' }, { status: 403 });
         }
 
-        // Fetch all leads with Team and SDR relations to build a rich export
-        const allLeads = await prisma.lead.findMany({
-            include: {
-                team: {
-                    select: { name: true }
-                }
-            },
-            orderBy: [
-                { priority_score: 'desc' },
-                { createdAt: 'desc' }
-            ]
-        });
+        const { searchParams } = new URL(req.url);
+        const exportType = searchParams.get('type') || 'leads';
 
-        // We also need the names of the SDRs, but `sdr_id` is just a string in Lead.
-        // Let's fetch the mapping.
+        // We need the names of the SDRs, but `sdr_id` is just a string in Lead.
         const allSdrs = await prisma.user.findMany({
             where: { role: { in: ['SDR', 'MANAGER'] } },
             select: { id: true, name: true, email: true }
@@ -43,7 +32,47 @@ export async function GET(req: Request) {
 
         const sdrMap = new Map(allSdrs.map(u => [u.id, u.name || u.email]));
 
-        // Shape the payload
+        if (exportType === 'meetings') {
+            const allMeetings = await prisma.meeting.findMany({
+                include: {
+                    lead: {
+                        include: { team: { select: { name: true } } }
+                    }
+                },
+                orderBy: { meeting_date: 'desc' }
+            });
+
+            const formattedMeetings = allMeetings.map(m => ({
+                "Meeting Date": m.meeting_date,
+                "Meeting Time": m.meeting_time,
+                "Identity": m.lead?.lead_identity || 'Unknown',
+                "Status": m.meeting_status,
+                "Booked By": m.booked_by,
+                "Team": m.lead?.team?.name || 'Unassigned',
+                "No Show": m.no_show ? 'Yes' : 'No',
+                "Notes": m.meeting_notes || 'N/A'
+            }));
+
+            return NextResponse.json({
+                success: true,
+                type: 'meetings',
+                data: formattedMeetings,
+                total: formattedMeetings.length
+            });
+        }
+
+        // Default: Leads Export (Active Pipeline)
+        const allLeads = await prisma.lead.findMany({
+            where: { lead_status: 'Active' },
+            include: {
+                team: { select: { name: true } }
+            },
+            orderBy: [
+                { priority_score: 'desc' },
+                { createdAt: 'desc' }
+            ]
+        });
+
         const formattedLeads = allLeads.map(lead => ({
             "Identity": lead.lead_identity,
             "City": lead.assignment_info,
@@ -59,7 +88,8 @@ export async function GET(req: Request) {
 
         return NextResponse.json({
             success: true,
-            leads: formattedLeads,
+            type: 'leads',
+            data: formattedLeads,
             total: formattedLeads.length
         });
     } catch (e: any) {

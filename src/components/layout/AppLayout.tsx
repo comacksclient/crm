@@ -14,7 +14,8 @@ import {
     LogOut,
     Menu,
     X,
-    Target
+    Target,
+    ClipboardList
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -42,8 +43,10 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
         if (user.role === 'ADMIN') {
             menu.unshift({ name: 'System Setup', href: '/dashboard/admin', icon: Settings });
             menu.unshift({ name: 'Lead Delegation', href: '/dashboard/admin/delegation', icon: Target });
+            menu.unshift({ name: 'Assigned Leads', href: '/dashboard/admin/assigned', icon: ClipboardList });
             menu.unshift({ name: 'Global Roster', href: '/dashboard/admin/users', icon: Briefcase });
         } else if (user.role === 'MANAGER') {
+            menu.unshift({ name: 'Assigned Leads', href: '/dashboard/admin/assigned', icon: ClipboardList });
             menu.unshift({ name: 'Team Engine', href: '/dashboard/manager', icon: Briefcase });
         }
 

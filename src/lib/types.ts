@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'manager' | 'sdr';
 
-export type LeadStatus = 'Active' | 'Meeting Booked' | 'Disqualified';
+export type LeadStatus = 'Active' | 'Meeting Booked' | 'Disqualified' | 'Inactive';
 
 export type CallOutcome =
     | 'Doctor Connected'
@@ -29,6 +29,16 @@ export interface Lead {
     lead_identity: string;
     assignment_info: string;
 
+    // Explicit Lead Identity
+    lead_code?: string | null;
+    clinic_name?: string | null;
+    phone_number?: string | null;
+    city?: string | null;
+
+    // Hierarchy & Assignment
+    assigned_to?: string | null;
+    assigned_date?: string | null;
+
     // Call Qualification
     call_outcome?: CallOutcome | null;
     doctor_type?: DoctorType | null;
@@ -41,10 +51,11 @@ export interface Lead {
     next_action_date?: string; // YYYY-MM-DD
     last_call_date?: string; // YYYY-MM-DD
     touch_count: number;
+    overdue?: boolean;
 
-    meeting_status?: 'confirmed' | null;
-    meeting_date?: string;
-    meeting_time?: string;
+    meeting_status?: boolean;
+    meeting_date?: string | null;
+    meeting_time?: string | null;
 
     lead_status: LeadStatus;
     priority_score: number;

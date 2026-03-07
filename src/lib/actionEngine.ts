@@ -64,7 +64,7 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
         }
         else if (interest === 5) {
             if (payload.meetingDate && payload.meetingTime) {
-                updatedLead.meeting_status = 'confirmed';
+                updatedLead.meeting_status = true;
                 updatedLead.meeting_date = payload.meetingDate;
                 updatedLead.meeting_time = payload.meetingTime;
                 updatedLead.lead_status = 'Meeting Booked';
@@ -99,6 +99,7 @@ export function calculatePriorityScore(lead: Lead): number {
 
     // priority_score = (Overdue_Flag * 100) + (Interest_Level * 10)
     let priorityScore = (overdueFlag * 100) + (interestLevel * 10);
+    lead.overdue = overdueFlag === 1;
 
     return priorityScore;
 }

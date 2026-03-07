@@ -7,6 +7,16 @@ export const mapPrismaToLead = (dbLead: any): Lead => ({
     _rowIndex: dbLead.id, // Using DB UUID instead of spreadsheet row index
     lead_identity: dbLead.lead_identity,
     assignment_info: dbLead.assignment_info,
+
+    // Explicit Identity Flags
+    clinic_name: dbLead.clinic_name,
+    phone_number: dbLead.phone_number,
+    city: dbLead.city,
+
+    // Hierarchy Data
+    assigned_to: dbLead.assigned_to,
+    assigned_date: dbLead.assigned_date,
+
     call_outcome: dbLead.call_outcome as any,
     doctor_type: dbLead.doctor_type as any,
     interest_level: dbLead.interest_level,
@@ -16,9 +26,10 @@ export const mapPrismaToLead = (dbLead: any): Lead => ({
     next_action_date: dbLead.next_action_date || '',
     last_call_date: dbLead.last_call_date || '',
     touch_count: dbLead.touch_count,
-    meeting_status: null, // Derived from relations if needed
-    meeting_date: '',
-    meeting_time: '',
+    overdue: dbLead.overdue,
+    meeting_status: dbLead.meeting_status,
+    meeting_date: dbLead.meeting_date || '',
+    meeting_time: dbLead.meeting_time || '',
     lead_status: dbLead.lead_status as any,
     priority_score: dbLead.priority_score,
     locked_by: null,
@@ -43,6 +54,10 @@ export async function updateLeadRow(rowIndex: string, lead: Lead) {
                 touch_count: lead.touch_count,
                 lead_status: lead.lead_status,
                 priority_score: lead.priority_score,
+                overdue: lead.overdue || false,
+                meeting_status: lead.meeting_status || false,
+                meeting_date: lead.meeting_date || null,
+                meeting_time: lead.meeting_time || null
             }
         });
     } catch (e) {
@@ -66,9 +81,14 @@ export async function appendToMeetings(lead: Lead, bookedBy: string) {
         await prisma.meeting.create({
             data: {
                 lead_id: lead._rowIndex as string,
+
+                // Lead Identity Snapshots
+                clinic_name: lead.clinic_name || lead.lead_identity.split(' - ')[0] || null,
+                phone_number: lead.phone_number || null,
+
                 meeting_date: lead.meeting_date || '',
                 meeting_time: lead.meeting_time || '',
-                meeting_status: lead.meeting_status || 'Scheduled',
+                meeting_status: 'Scheduled', // Specific lifecycle tracker
                 booked_by: bookedBy
             }
         });
