@@ -6,14 +6,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { useState } from 'react';
-import { Loader2, ExternalLink, PlusCircle, UploadCloud, FileSpreadsheet } from 'lucide-react';
+import { Loader2, ExternalLink, PlusCircle, UploadCloud, FileSpreadsheet, Download, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import Papa from 'papaparse';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function AdminDashboard() {
     const { data: session, status } = useSession();
     const [generating, setGenerating] = useState(false);
     const [sheetUrl, setSheetUrl] = useState<string | null>(null);
+    const [profile, setProfile] = useState<{ role: string, teamName: string } | null>(null);
 
     const [uploading, setUploading] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -24,6 +28,16 @@ export default function AdminDashboard() {
     const [manualPhoneNumber, setManualPhoneNumber] = useState('');
     const [manualCity, setManualCity] = useState('');
     const [manualLeadType, setManualLeadType] = useState('');
+
+    const [exporting, setExporting] = useState(false);
+
+    useState(() => {
+        fetch('/api/auth/me')
+            .then(r => r.json())
+            .then(data => {
+                if (data.user) setProfile({ role: data.user.role, teamName: data.user.teamName });
+            });
+    });
 
     // Wait for auth resolution
     if (status === 'loading') return <div className="p-12 text-center text-slate-500">Loading admin controls...</div>;
@@ -136,6 +150,69 @@ export default function AdminDashboard() {
         }
     };
 
+    const handleExportPDF = async () => {
+        setExporting(true);
+        try {
+            const res = await fetch('/api/admin/export');
+            if (res.ok) {
+                const data = await res.json();
+                const leads = data.leads;
+
+                if (!leads || leads.length === 0) {
+                    toast.error("No leads available in the database to export.");
+                    setExporting(false);
+                    return;
+                }
+
+                // Initialize jsPDF (landscape for wide tables)
+                const doc = new jsPDF('landscape');
+
+                // Set Title
+                doc.setFontSize(18);
+                doc.text('CRM Lead Pipeline Database Export', 14, 22);
+                doc.setFontSize(11);
+                doc.setTextColor(100);
+                doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+                doc.text(`Total Active/Disqualified Records: ${data.total}`, 14, 36);
+
+                // Setup Table Headers and Body
+                const tableColumn = ["Identity", "City", "Status", "Priority", "Touches", "Outcome", "Action Date", "Team", "Caller"];
+                const tableRows = leads.map((lead: any) => [
+                    lead.Identity,
+                    lead.City,
+                    lead.Status,
+                    lead.Priority.toString(),
+                    lead.Touches.toString(),
+                    lead.Outcome,
+                    lead["Action Date"],
+                    lead.Team,
+                    lead.Caller
+                ]);
+
+                // Generate table
+                autoTable(doc, {
+                    head: [tableColumn],
+                    body: tableRows,
+                    startY: 45,
+                    styles: { fontSize: 8, cellPadding: 2 },
+                    headStyles: { fillColor: [79, 70, 229] }, // Indigo 600
+                    alternateRowStyles: { fillColor: [248, 250, 252] }, // Slate 50
+                });
+
+                // Download locally
+                doc.save(`CRM_Lead_Export_${new Date().toISOString().split('T')[0]}.pdf`);
+                toast.success('Database fully exported alongside relational graphs as a PDF document!');
+
+            } else {
+                toast.error("You are not authorized to export the master database.");
+            }
+        } catch (e) {
+            toast.error("A network error occurred during the master export.");
+        } finally {
+            setExporting(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6">
             <div className="max-w-6xl mx-auto space-y-6">
@@ -144,20 +221,31 @@ export default function AdminDashboard() {
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">System Setup</h1>
                         <p className="text-slate-500 text-sm">Sheet configuration and data ingestion</p>
                     </div>
-                    <div className="flex gap-4">
-                        <Link href="/dashboard/admin/users">
-                            <Button variant="outline" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200">Manage Teams & Users</Button>
-                        </Link>
-                        <Link href="/dashboard/admin/delegation">
-                            <Button variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">Delegate Leads to Teams</Button>
-                        </Link>
-                        <Link href="/meetings">
-                            <Button variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200">View Meetings Booked</Button>
-                        </Link>
-                        <Link href="/queue">
-                            <Button variant="outline" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200">Return to CRM Table</Button>
-                        </Link>
+                    <div className="flex flex-col items-end gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <UserCircle2 className="h-4 w-4 text-indigo-500" />
+                            Logged in as {session.user?.name || session.user?.email}
+                        </div>
+                        <div className="flex gap-2">
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 border-indigo-200 capitalize">{profile?.role.toLowerCase() || '...'}</Badge>
+                            <Badge variant="outline" className="bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 border-emerald-200">{profile?.teamName || '...'}</Badge>
+                        </div>
                     </div>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 flex gap-4 overflow-x-auto">
+                    <Link href="/dashboard/admin/users">
+                        <Button variant="outline" className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 whitespace-nowrap">Manage Teams & Users</Button>
+                    </Link>
+                    <Link href="/dashboard/admin/delegation">
+                        <Button variant="outline" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200 whitespace-nowrap">Delegate Leads to Teams</Button>
+                    </Link>
+                    <Link href="/meetings">
+                        <Button variant="outline" className="bg-green-50 text-green-700 hover:bg-green-100 border-green-200 whitespace-nowrap">View Meetings Booked</Button>
+                    </Link>
+                    <Link href="/queue">
+                        <Button variant="outline" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200 whitespace-nowrap">Return to CRM Table</Button>
+                    </Link>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -274,6 +362,21 @@ export default function AdminDashboard() {
                                     <span className="text-xs font-bold text-green-600 uppercase px-2 py-1 bg-green-100 dark:bg-green-900/50 rounded-full">Online</span>
                                 </div>
                                 <p className="text-xs text-green-600 dark:text-green-400">Automated rules and priority routing are processing.</p>
+                            </div>
+
+                            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4">
+                                <div>
+                                    <h4 className="font-semibold text-sm">Database Export</h4>
+                                    <p className="text-xs text-slate-500 mt-1 mb-3">Download a structured PDF of the entire CRM including relational Team/Caller maps and calculated Action metrics.</p>
+                                </div>
+                                <Button
+                                    onClick={handleExportPDF}
+                                    disabled={exporting}
+                                    className="w-full bg-slate-900 hover:bg-slate-800 text-white gap-2"
+                                >
+                                    {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                                    {exporting ? "Compiling PDF..." : "Export Lead Database (PDF)"}
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>

@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, BriefcaseMedical, CheckSquare, Square, Link as LinkIcon, Check } from 'lucide-react';
+import { Loader2, BriefcaseMedical, CheckSquare, Square, Link as LinkIcon, Check, Zap } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 
 interface AssignableLead {
@@ -35,6 +37,10 @@ export default function ManagerDashboard() {
     const [managerTeamId, setManagerTeamId] = useState<string | null>(null);
     const [generatingInvite, setGeneratingInvite] = useState(false);
     const [copiedInvite, setCopiedInvite] = useState(false);
+
+    const [showDistributeModal, setShowDistributeModal] = useState(false);
+    const [distributeCount, setDistributeCount] = useState('100');
+    const [distributing, setDistributing] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -124,30 +130,38 @@ export default function ManagerDashboard() {
     };
 
     const handleGenerateInvite = async () => {
-        if (!managerTeamId) return;
-        setGeneratingInvite(true);
+        // Redacted: Only Admins can invite now
+        toast.error('Only Administrators can generate team invitations.');
+    };
+
+    const handleDistribute = async () => {
+        const count = parseInt(distributeCount);
+        if (isNaN(count) || count <= 0) {
+            toast.error("Please enter a valid number of leads per SDR.");
+            return;
+        }
+
+        setDistributing(true);
         try {
-            const res = await fetch('/api/teams/invite/generate', {
+            const res = await fetch('/api/leads/distribute', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ teamId: managerTeamId })
+                body: JSON.stringify({ perSdrCount: count })
             });
 
             if (res.ok) {
                 const data = await res.json();
-                const inviteUrl = `${window.location.origin}/invite/${data.inviteId}`;
-                await navigator.clipboard.writeText(inviteUrl);
-                toast.success('Secure Invite Link copied to your clipboard!');
-                setCopiedInvite(true);
-                setTimeout(() => setCopiedInvite(false), 3000);
+                toast.success(data.message);
+                setShowDistributeModal(false);
+                fetchData();
             } else {
                 const data = await res.json();
-                toast.error(data.error || 'Failed to generate invite');
+                toast.error(data.error || 'Failed to distribute leads');
             }
         } catch (e) {
-            toast.error('Network error generating invite');
+            toast.error('Network error during lead distribution');
         } finally {
-            setGeneratingInvite(false);
+            setDistributing(false);
         }
     };
 
@@ -166,17 +180,14 @@ export default function ManagerDashboard() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {managerTeamId && (
-                            <Button
-                                variant="outline"
-                                onClick={handleGenerateInvite}
-                                disabled={generatingInvite}
-                                className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 dark:hover:bg-indigo-900/40 gap-2"
-                            >
-                                {generatingInvite ? <Loader2 className="h-4 w-4 animate-spin" /> : copiedInvite ? <Check className="h-4 w-4 text-green-600" /> : <LinkIcon className="h-4 w-4" />}
-                                {copiedInvite ? 'Copied Link!' : 'Invite SDRs to Team'}
-                            </Button>
-                        )}
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowDistributeModal(true)}
+                            className="text-amber-600 border-amber-200 hover:bg-amber-50 gap-2"
+                        >
+                            <Zap className="h-4 w-4 fill-amber-500" />
+                            Turbo Distribute
+                        </Button>
                     </div>
                 </div>
 
@@ -279,6 +290,49 @@ export default function ManagerDashboard() {
                     </div>
                 </Card>
             </div>
+
+            {/* Distribute Modal */}
+            {showDistributeModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+                        <div>
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <Zap className="h-5 w-5 text-amber-500 fill-amber-500" />
+                                Turbo Distribute Leads
+                            </h2>
+                            <p className="text-sm text-slate-500 mt-1">Automatically split unassigned leads among all your team SDRs based on priority score.</p>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="dist-count">Leads per SDR</Label>
+                                <Input
+                                    id="dist-count"
+                                    type="number"
+                                    value={distributeCount}
+                                    onChange={(e) => setDistributeCount(e.target.value)}
+                                    placeholder="e.g. 100"
+                                />
+                                <p className="text-[10px] text-slate-400">If you have 5 SDRs and enter 100, the top 500 leads will be assigned instantly.</p>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end gap-3 pt-2">
+                            <Button variant="outline" onClick={() => setShowDistributeModal(false)} disabled={distributing}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleDistribute}
+                                disabled={distributing || !distributeCount}
+                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                            >
+                                {distributing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
+                                Distribute Now
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

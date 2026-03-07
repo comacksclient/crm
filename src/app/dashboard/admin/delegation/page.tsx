@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, ArrowRightCircle, CheckSquare, Square, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowRightCircle, CheckSquare, Square, ArrowLeft, UserCircle2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 
@@ -30,10 +31,20 @@ export default function AdminDelegationDesk() {
     const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
     const [selectedTeam, setSelectedTeam] = useState<string>('');
     const [assigning, setAssigning] = useState(false);
+    const [profile, setProfile] = useState<{ role: string, teamName: string } | null>(null);
 
     useEffect(() => {
         fetchData();
+        fetchProfile();
     }, []);
+
+    const fetchProfile = async () => {
+        const res = await fetch('/api/auth/me');
+        if (res.ok) {
+            const data = await res.json();
+            setProfile({ role: data.user.role, teamName: data.user.teamName });
+        }
+    };
 
     const fetchData = async () => {
         setLoadingLeads(true);
@@ -120,7 +131,7 @@ export default function AdminDelegationDesk() {
             <div className="max-w-7xl mx-auto space-y-6">
 
                 {/* Header */}
-                <div className="flex justify-between items-center flex-wrap gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <ArrowRightCircle className="h-6 w-6 text-indigo-600" />
@@ -128,13 +139,23 @@ export default function AdminDelegationDesk() {
                         </h1>
                         <p className="text-sm text-slate-500 mt-1">Push uploaded raw leads downward into specific Corporate Teams.</p>
                     </div>
-                    <div className="flex items-center gap-3">
-                        <Link href="/dashboard/admin">
-                            <Button variant="outline" className="gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                                <ArrowLeft className="h-4 w-4" /> Back to Setup
-                            </Button>
-                        </Link>
+                    <div className="flex flex-col items-end gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <UserCircle2 className="h-4 w-4 text-indigo-500" />
+                            Current Team: {profile?.teamName || '...'}
+                        </div>
+                        <div className="flex gap-2">
+                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 border-indigo-200 capitalize">{profile?.role.toLowerCase() || '...'}</Badge>
+                        </div>
                     </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <Link href="/dashboard/admin">
+                        <Button variant="outline" className="gap-2 text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                            <ArrowLeft className="h-4 w-4" /> Back to Setup
+                        </Button>
+                    </Link>
                 </div>
 
                 {/* Delegation Control Bar */}
@@ -144,7 +165,7 @@ export default function AdminDelegationDesk() {
                             {selectedLeads.size === leads.length && leads.length > 0 ? (
                                 <><CheckSquare className="h-4 w-4 mr-2" /> Deselect All</>
                             ) : (
-                                <><Square className="h-4 w-4 mr-2" /> Select All Current Page</>
+                                <><Square className="h-4 w-4 mr-2" /> Select All Leads</>
                             )}
                         </Button>
                         <span className="text-sm font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-md">
@@ -198,13 +219,13 @@ export default function AdminDelegationDesk() {
                                     <tr>
                                         <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
                                             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                                            Scanning global pool for raw leads...
+                                            Scanning global pool...
                                         </td>
                                     </tr>
                                 ) : leads.length === 0 ? (
                                     <tr>
                                         <td colSpan={4} className="px-6 py-12 text-center text-slate-500 text-lg">
-                                            🎉 All leads have been successfully delegated to teams!
+                                            🎉 All leads successfully delegated!
                                         </td>
                                     </tr>
                                 ) : (
@@ -218,15 +239,17 @@ export default function AdminDelegationDesk() {
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedLeads.has(lead.id)}
-                                                    onChange={() => { }} // Controlled via row click
+                                                    readOnly
                                                     className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 pointer-events-none"
                                                 />
                                             </td>
                                             <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100 max-w-[400px] truncate" title={lead.lead_identity}>
                                                 {lead.lead_identity}
                                             </td>
-                                            <td className="px-6 py-4 font-mono text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded w-fit inline-flex mt-2 ml-4">
-                                                {lead.assignment_info || 'N/A'}
+                                            <td className="px-6 py-4">
+                                                <span className="font-mono text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded">
+                                                    {lead.assignment_info || 'N/A'}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400">
                                                 {lead.lead_type || 'New'}

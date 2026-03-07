@@ -13,9 +13,10 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Fetch user from DB to get reliable Role and ID
+        // Fetch user from DB to get reliable Role and ID, including their team name
         const dbUser = await prisma.user.findUnique({
-            where: { email: session.user.email as string }
+            where: { email: session.user.email as string },
+            include: { team: { select: { name: true } } }
         });
 
         if (!dbUser) { return NextResponse.json({ error: 'Unauthorized' }, { status: 401 }); }
@@ -56,7 +57,10 @@ export async function GET() {
             return (a.touch_count || 0) - (b.touch_count || 0); // Ascending
         });
 
-        return NextResponse.json({ leads: activeLeads });
+        return NextResponse.json({
+            leads: activeLeads,
+            teamName: dbUser.team?.name || 'Unassigned'
+        });
     } catch (e: any) {
         console.error("Error fetching leads list:", e);
         return NextResponse.json({ error: e.message || 'Internal Server Error' }, { status: 500 });

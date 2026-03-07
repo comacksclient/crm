@@ -15,19 +15,14 @@ export async function POST(req: Request) {
             where: { email: session.user.email as string }
         });
 
-        if (!dbUser || (dbUser.role !== 'ADMIN' && dbUser.role !== 'MANAGER')) {
-            return NextResponse.json({ error: 'Forbidden: Admins or Managers only.' }, { status: 403 });
+        if (!dbUser || dbUser.role !== 'ADMIN') {
+            return NextResponse.json({ error: 'Forbidden: Only Administrators can generate team invites.' }, { status: 403 });
         }
 
         const { teamId } = await req.json();
 
         if (!teamId) {
             return NextResponse.json({ error: 'teamId is required' }, { status: 400 });
-        }
-
-        // Security Check: If they are a Manager, they can ONLY invite to their own team.
-        if (dbUser.role === 'MANAGER' && dbUser.team_id !== teamId) {
-            return NextResponse.json({ error: 'Forbidden: You can only generate invites for your own team.' }, { status: 403 });
         }
 
         // Generate an invite valid for 7 days

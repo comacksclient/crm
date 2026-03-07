@@ -21,10 +21,10 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
     updatedLead.call_notes = payload.notes || '';
     updatedLead.last_call_date = todayDate;
 
-    // Preliminary Disqualification check (before Outcome logic, but Touch count will be checked again)
+    // Preliminary Disqualification check
     if (outcome === 'Invalid' || interest === 1 || interest === 2) {
         updatedLead.lead_status = 'Disqualified';
-        return updatedLead;
+        // Note: Check Touch count later, it still applies!
     }
 
     // Outcome-Based Automation
@@ -32,7 +32,7 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
         updatedLead.next_action_type = 'Reattempt';
         updatedLead.next_action_date = tomorrowDate;
         updatedLead.touch_count += 1;
-        updatedLead.lead_status = 'Active';
+        if (updatedLead.lead_status !== 'Disqualified') updatedLead.lead_status = 'Active';
     }
     else if (outcome === 'Assistant picked' || outcome === 'Call back requested') {
         updatedLead.next_action_type = 'Call follow up';
@@ -42,20 +42,24 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
         // Reset call qualification fields to default
         updatedLead.doctor_type = null;
         updatedLead.interest_level = null;
-        updatedLead.lead_status = 'Active';
+        if (updatedLead.lead_status !== 'Disqualified') updatedLead.lead_status = 'Active';
     }
     else if (outcome === 'Doctor Connected') {
         if (interest === 3 || interest === 4) {
             updatedLead.next_action_date = todayDate;
-            updatedLead.lead_status = 'Active';
+            if (updatedLead.lead_status !== 'Disqualified') updatedLead.lead_status = 'Active';
 
-            if (interest === 3) {
-                updatedLead.next_action_type = 'Whatsapp details';
-                updatedLead.whatsapp_details_sent = payload.whatsappDetailsSent || false;
-                updatedLead.touch_count += 1; // Unconditional increment per flowchart rules
-            } else if (interest === 4) {
+            if (interest === 4) {
                 updatedLead.next_action_type = 'Call follow up';
-                updatedLead.touch_count += 1;
+                // Prompt: "If (interest level==4) call follow up ... If (whatsapp_sent == true ) touch++"
+                if (payload.whatsappDetailsSent) {
+                    updatedLead.touch_count += 1;
+                }
+            } else if (interest === 3) {
+                updatedLead.next_action_type = 'Whatsapp details';
+                if (payload.whatsappDetailsSent) {
+                    updatedLead.touch_count += 1;
+                }
             }
         }
         else if (interest === 5) {
@@ -64,17 +68,11 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
                 updatedLead.meeting_date = payload.meetingDate;
                 updatedLead.meeting_time = payload.meetingTime;
                 updatedLead.lead_status = 'Meeting Booked';
-                updatedLead.touch_count += 1;
-            } else {
-                updatedLead.lead_status = 'Active';
-                updatedLead.next_action_type = 'Call follow up';
-                updatedLead.next_action_date = tomorrowDate;
-                updatedLead.touch_count += 1;
             }
         }
     }
 
-    // Post-Execution touch count evaluation
+    // Post-Execution touch count evaluation for Disqualification
     if (updatedLead.touch_count >= 5) {
         updatedLead.lead_status = 'Disqualified';
     }
@@ -99,12 +97,8 @@ export function calculatePriorityScore(lead: Lead): number {
     const overdueFlag = daysUntilAction < 0 ? 1 : 0;
     const interestLevel = lead.interest_level || 0; // if null, 0
 
-    // priority_score = (Overdue_Flag * 100) + (Interest_Level * 10) - Days_Until_Action
-    let priorityScore = (overdueFlag * 100) + (interestLevel * 10) - daysUntilAction;
-
-    // A future date without an interest level might naturally compute to a negative number (e.g. 0 + 0 - 1 = -1).
-    // Let's clamp it to a minimum of 0 so it reads cleaner in the UI.
-    if (priorityScore < 0) priorityScore = 0;
+    // priority_score = (Overdue_Flag * 100) + (Interest_Level * 10)
+    let priorityScore = (overdueFlag * 100) + (interestLevel * 10);
 
     return priorityScore;
 }

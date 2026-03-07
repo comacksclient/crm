@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 
 export default function QueuePage() {
     const [leads, setLeads] = useState<Lead[]>([]);
+    const [teamName, setTeamName] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Modal & Form State
@@ -40,6 +41,7 @@ export default function QueuePage() {
             if (res.ok) {
                 const data = await res.json();
                 setLeads(data.leads || []);
+                setTeamName(data.teamName || 'Unassigned');
             } else {
                 toast.error('Failed to load leads table');
             }
@@ -117,8 +119,15 @@ export default function QueuePage() {
                 {/* Header */}
                 <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">CRM Table View</h1>
-                        <p className="text-sm text-slate-500">View and log interactions for all Active leads. Sorted by priority.</p>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            CRM Table View
+                            {teamName && (
+                                <span className="text-xs font-normal px-2 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800">
+                                    {teamName}
+                                </span>
+                            )}
+                        </h1>
+                        <p className="text-sm text-slate-500">View and log interactions for your assigned leads. Sorted by priority.</p>
                     </div>
                     <div className="flex items-center gap-3">
                         <Button variant="outline" onClick={() => window.location.href = '/meetings'} className="gap-2 text-green-600 border-green-200 hover:bg-green-50">
@@ -158,8 +167,19 @@ export default function QueuePage() {
                                     </tr>
                                 ) : leads.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                                            No active leads found in the system.
+                                        <td colSpan={7} className="px-6 py-12 text-center">
+                                            <div className="flex flex-col items-center gap-3">
+                                                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full">
+                                                    <Loader2 className="h-6 w-6 text-slate-400" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">No leads assigned to you yet</p>
+                                                    <p className="text-sm text-slate-500 max-w-md mx-auto">
+                                                        You are currently in the <b>{teamName}</b> team.
+                                                        Wait for your Manager to assign leads to your queue or ask them to use the "Turbo Distribute" tool.
+                                                    </p>
+                                                </div>
+                                            </div>
                                         </td>
                                     </tr>
                                 ) : (
@@ -295,7 +315,7 @@ export default function QueuePage() {
                                     </div>
                                 )}
 
-                                {outcome === 'Doctor Connected' && interestLevel === 3 && (
+                                {outcome === 'Doctor Connected' && (interestLevel === 3 || interestLevel === 4) && (
                                     <div className="flex items-center gap-3 mt-4 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
                                         <input
                                             type="checkbox"
