@@ -20,9 +20,11 @@ export type DoctorType =
 export type InterestLevel = 1 | 2 | 3 | 4 | 5;
 
 export type NextActionType =
-    | 'Call follow up'
-    | 'Whatsapp details'
-    | 'Reattempt';
+    | 'Call follow up 1'
+    | 'Call follow up 2'
+    | 'WhatsApp Follow Up'
+    | 'Reattempt call'
+    | 'New';
 
 export interface Lead {
     _rowIndex?: string; // Prisma Database UUID acting as the index
@@ -52,6 +54,7 @@ export interface Lead {
     last_call_date?: string; // YYYY-MM-DD
     touch_count: number;
     overdue?: boolean;
+    whatsapp_status?: string;
 
     meeting_status?: boolean;
     meeting_date?: string | null;

@@ -17,6 +17,7 @@ interface MeetingResult {
     meeting_time: string;
     meeting_status: string;
     meeting_notes: string;
+    sdr_name?: string;
     created_at: string;
 }
 
@@ -61,30 +62,31 @@ export default function MeetingsPage() {
                 </div>
 
                 {/* Data Table */}
-                <Card className="shadow-sm border-slate-200 dark:border-slate-800 overflow-hidden">
+                <Card className="shadow-sm border-slate-200 dark:border-slate-800 overflow-hidden ring-1 ring-slate-200 dark:ring-slate-800">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
+                        <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
                             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                                 <tr>
-                                    <th className="px-6 py-4">Date Booked On</th>
-                                    <th className="px-6 py-4">Clinic Name</th>
-                                    <th className="px-6 py-4">Phone / City</th>
-                                    <th className="px-6 py-4 text-center">Meeting Date</th>
-                                    <th className="px-6 py-4 text-center">Time</th>
-                                    <th className="px-6 py-4 text-center">Status</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Date Booked On</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Clinic Name</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Phone / City</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Booked By</th>
+                                    <th className="px-6 py-4 text-center whitespace-nowrap">Meeting Date</th>
+                                    <th className="px-6 py-4 text-center whitespace-nowrap">Time</th>
+                                    <th className="px-6 py-4 text-center whitespace-nowrap">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500 whitespace-nowrap">
                                             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                                             Loading scheduled meetings...
                                         </td>
                                     </tr>
                                 ) : meetings.length === 0 ? (
                                     <tr>
-                                        <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500 whitespace-nowrap">
                                             No meetings booked yet. Generate some leads!
                                         </td>
                                     </tr>
@@ -97,12 +99,15 @@ export default function MeetingsPage() {
                                             <td className="px-6 py-4 whitespace-nowrap text-slate-500">
                                                 {format(new Date(meeting.created_at), 'MMM dd, yyyy')}
                                             </td>
-                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 max-w-[200px] truncate" title={meeting.clinic_name}>
+                                            <td className="px-6 py-4 font-bold text-slate-900 dark:text-slate-100 max-w-[200px] truncate whitespace-nowrap" title={meeting.clinic_name}>
                                                 {meeting.clinic_name}
                                             </td>
-                                            <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
+                                            <td className="px-6 py-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
                                                 <div className="font-mono text-xs">{meeting.phone_number}</div>
                                                 <div className="text-xs text-slate-500">{meeting.city}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-indigo-600 dark:text-indigo-400 font-medium whitespace-nowrap">
+                                                {meeting.sdr_name || 'System'}
                                             </td>
                                             <td className="px-6 py-4 text-center whitespace-nowrap font-medium text-slate-800 dark:text-slate-200">
                                                 {format(new Date(meeting.meeting_date), 'MMM dd, yyyy')}
@@ -110,8 +115,8 @@ export default function MeetingsPage() {
                                             <td className="px-6 py-4 text-center whitespace-nowrap text-indigo-700 dark:text-indigo-400 font-semibold bg-indigo-50/50 dark:bg-indigo-950/20">
                                                 {meeting.meeting_time}
                                             </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold ${meeting.meeting_status === 'Scheduled' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                                            <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${meeting.meeting_status === 'Scheduled' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
                                                     {meeting.meeting_status}
                                                 </span>
                                             </td>
@@ -122,7 +127,7 @@ export default function MeetingsPage() {
                         </table>
                     </div>
                 </Card>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

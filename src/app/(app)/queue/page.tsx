@@ -10,12 +10,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { signOut } from 'next-auth/react';
-import { Loader2, LogOut, CheckCircle2, X } from 'lucide-react';
 import { format } from 'date-fns';
+import { Trash2, Edit, Loader2, CheckCircle2, X, LogOut } from 'lucide-react';
 
 export default function QueuePage() {
     const [leads, setLeads] = useState<Lead[]>([]);
     const [teamName, setTeamName] = useState<string | null>(null);
+    const [userRole, setUserRole] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
 
     // Modal & Form State
@@ -30,6 +31,13 @@ export default function QueuePage() {
     const [meetingTime, setMeetingTime] = useState('');
     const [whatsappSent, setWhatsappSent] = useState(false);
 
+    // Edit Modal State
+    const [editingLead, setEditingLead] = useState<Lead | null>(null);
+    const [editClinicName, setEditClinicName] = useState('');
+    const [editCity, setEditCity] = useState('');
+    const [editPhone, setEditPhone] = useState('');
+    const [savingEdit, setSavingEdit] = useState(false);
+
     useEffect(() => {
         fetchLeads();
     }, []);
@@ -42,8 +50,12 @@ export default function QueuePage() {
                 const data = await res.json();
                 setLeads(data.leads || []);
                 setTeamName(data.teamName || 'Unassigned');
-            } else {
-                toast.error('Failed to load leads table');
+            }
+
+            const userRes = await fetch('/api/auth/me');
+            if (userRes.ok) {
+                const userData = await userRes.json();
+                setUserRole(userData.user?.role || 'SDR');
             }
         } catch (e) {
             toast.error('Network error while fetching leads');
@@ -54,13 +66,13 @@ export default function QueuePage() {
 
     const handleRowClick = (lead: Lead) => {
         setActiveLead(lead);
-        setOutcome('');
-        setDoctorType('');
-        setInterestLevel('');
-        setNotes('');
-        setMeetingDate('');
-        setMeetingTime('');
-        setWhatsappSent(false);
+        setOutcome(lead.call_outcome || '');
+        setDoctorType(lead.doctor_type || '');
+        setInterestLevel(lead.interest_level || '');
+        setNotes(lead.call_notes || '');
+        setMeetingDate(lead.meeting_date || '');
+        setMeetingTime(lead.meeting_time || '');
+        setWhatsappSent(lead.whatsapp_details_sent || false);
     };
 
     const handleCloseModal = () => {
@@ -112,6 +124,67 @@ export default function QueuePage() {
         }
     };
 
+    const handleDeleteLead = async (id: string, name: string) => {
+        if (!confirm(`Are you sure you want to PERMANENTLY delete ${name} from the system? This action cannot be undone.`)) return;
+
+        try {
+            const res = await fetch('/api/leads/purge', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leadIds: [id] })
+            });
+
+            if (res.ok) {
+                toast.success('Lead purged successfully');
+                fetchLeads();
+            } else {
+                toast.error('Failed to delete lead');
+            }
+        } catch (e) {
+            toast.error('Network error during deletion');
+        }
+    };
+
+    const handleOpenEdit = (lead: Lead) => {
+        setEditingLead(lead);
+        setEditClinicName(lead.clinic_name || lead.lead_identity.split(' - ')[0] || '');
+        setEditCity(lead.city || lead.assignment_info?.split(' - ')[0] || '');
+        setEditPhone(lead.phone_number || lead.lead_identity.split(' - ')[1] || '');
+    };
+
+    const handleSaveEdit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingLead) return;
+
+        setSavingEdit(true);
+        try {
+            const res = await fetch('/api/leads/edit', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    leadId: editingLead._rowIndex,
+                    clinic_name: editClinicName,
+                    city: editCity,
+                    phone_number: editPhone,
+                    lead_identity: `${editClinicName} - ${editPhone}`
+                })
+            });
+
+            if (res.ok) {
+                toast.success('Lead corrected successfully');
+                setEditingLead(null);
+                fetchLeads();
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to update lead');
+            }
+        } catch (e) {
+            toast.error('Error saving lead corrections');
+        } finally {
+            setSavingEdit(false);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 relative">
             <div className="max-w-7xl mx-auto space-y-6">
@@ -132,31 +205,32 @@ export default function QueuePage() {
                 </div>
 
                 {/* Data Table */}
-                <Card className="shadow-sm border-slate-200 dark:border-slate-800 overflow-hidden">
+                <Card className="shadow-sm border-slate-200 dark:border-slate-800 overflow-hidden ring-1 ring-slate-200 dark:ring-slate-800">
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
+                        <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
                             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                                 <tr>
-                                    <th className="px-6 py-4">Clinic / Lead</th>
-                                    <th className="px-6 py-4">City / Info</th>
-                                    <th className="px-6 py-4 text-center">Score</th>
-                                    <th className="px-6 py-4 text-center">Touches</th>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4">Next Action Date</th>
-                                    <th className="px-6 py-4 text-right">Action</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Name</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">City</th>
+                                    <th className="px-6 py-4 text-center whitespace-nowrap">Touches</th>
+                                    <th className="px-6 py-4 text-center whitespace-nowrap">Next Action Type</th>
+                                    <th className="px-6 py-4 text-center whitespace-nowrap">Status</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Next Action Date</th>
+                                    <th className="px-6 py-4 text-center whitespace-nowrap">Overdue</th>
+                                    <th className="px-6 py-4 text-right whitespace-nowrap">Action</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                                        <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
                                             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                                             Loading leads...
                                         </td>
                                     </tr>
                                 ) : leads.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="px-6 py-12 text-center">
+                                        <td colSpan={8} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-3">
                                                 <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full">
                                                     <Loader2 className="h-6 w-6 text-slate-400" />
@@ -180,37 +254,62 @@ export default function QueuePage() {
                                                 onClick={() => handleRowClick(lead)}
                                                 className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
                                             >
-                                                <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100 max-w-[200px] truncate" title={lead.lead_identity}>
-                                                    {lead.lead_identity}
+                                                <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100 max-w-[200px] truncate whitespace-nowrap" title={lead.lead_identity}>
+                                                    {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
                                                 </td>
-                                                <td className="px-6 py-4 text-slate-600 dark:text-slate-400 max-w-[150px] truncate" title={lead.assignment_info}>
-                                                    {lead.assignment_info || '-'}
+                                                <td className="px-6 py-4 text-slate-600 dark:text-slate-400 max-w-[150px] truncate whitespace-nowrap" title={lead.city || lead.assignment_info}>
+                                                    {lead.city || lead.assignment_info?.split(' - ')[0] || '-'}
                                                 </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-bold ${lead.priority_score > 50 ? 'bg-red-100 text-red-700' : lead.priority_score > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                                                        {lead.priority_score}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400">
+                                                <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400 whitespace-nowrap">
                                                     {lead.touch_count} / 5
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-md text-xs font-medium border border-green-200 dark:border-green-800">
+                                                <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                    <span className="text-xs font-semibold px-2 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-md whitespace-nowrap">
+                                                        {lead.next_action_type || 'New'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                    <span className="px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-md text-xs font-medium border border-green-200 dark:border-green-800 whitespace-nowrap">
                                                         {lead.lead_status}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className={isOverdue ? "text-red-600 font-semibold" : "text-slate-600"}>
-                                                            {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
-                                                        </span>
-                                                        {isOverdue && <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase font-bold rounded">Overdue</span>}
-                                                    </div>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={isOverdue ? "text-red-600 font-semibold whitespace-nowrap" : "text-slate-600 whitespace-nowrap"}>
+                                                        {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
+                                                    </span>
                                                 </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <Button size="sm" variant="ghost" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                        Log Call
-                                                    </Button>
+                                                <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                    {isOverdue ? (
+                                                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs uppercase font-bold rounded-full border border-red-200">Overdue</span>
+                                                    ) : (
+                                                        <span className="px-2 py-1 bg-slate-100 text-slate-500 text-xs font-medium rounded-full border border-slate-200">On Track</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        {userRole === 'ADMIN' && (
+                                                            <>
+                                                                <Button
+                                                                    onClick={(e) => { e.stopPropagation(); handleOpenEdit(lead); }}
+                                                                    size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                                                                >
+                                                                    <Edit className="h-4 w-4" />
+                                                                </Button>
+                                                                <Button
+                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead._rowIndex as string, lead.clinic_name || lead.lead_identity); }}
+                                                                    size="icon" variant="ghost" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                        <Button
+                                                            onClick={(e) => { e.stopPropagation(); handleRowClick(lead); }}
+                                                            size="sm" variant="ghost" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            Log Call
+                                                        </Button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         )
@@ -339,6 +438,45 @@ export default function QueuePage() {
                                 <Button type="submit" disabled={submitting || !outcome} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
                                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                                     Save Outcome
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Lead Modal (ADMIN ONLY) */}
+            {editingLead && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+                        <div className="flex justify-between items-center">
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <Edit className="h-5 w-5 text-amber-600" />
+                                Correct Lead Data
+                            </h2>
+                            <Button variant="ghost" size="icon" onClick={() => setEditingLead(null)} className="text-slate-400">
+                                <X className="h-5 w-5" />
+                            </Button>
+                        </div>
+
+                        <form onSubmit={handleSaveEdit} className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="editName">Clinic Name</Label>
+                                <Input id="editName" value={editClinicName} onChange={(e) => setEditClinicName(e.target.value)} required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editPhone">Phone Number</Label>
+                                <Input id="editPhone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editCity">City</Label>
+                                <Input id="editCity" value={editCity} onChange={(e) => setEditCity(e.target.value)} required />
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-4 border-t">
+                                <Button type="button" variant="outline" onClick={() => setEditingLead(null)}>Cancel</Button>
+                                <Button type="submit" disabled={savingEdit} className="bg-amber-600 hover:bg-amber-700 text-white gap-2">
+                                    {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Corrections'}
                                 </Button>
                             </div>
                         </form>

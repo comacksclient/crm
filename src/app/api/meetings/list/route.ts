@@ -11,8 +11,15 @@ export async function GET() {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
 
-        // Fetch all meetings and include the related Lead data (clinic name, phone)
-        const meetings = await prisma.meeting.findMany({
+        const dbUser = await prisma.user.findUnique({
+            where: { email: session.user.email as string },
+            select: { role: true, id: true, name: true }
+        });
+
+        if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
+
+        // Build Query based on role
+        let queryArgs: any = {
             include: {
                 lead: {
                     select: {
@@ -24,11 +31,26 @@ export async function GET() {
             orderBy: {
                 createdAt: 'desc'
             }
+        };
+
+        // SDRs strictly only see their OWN bookings
+        if (dbUser.role === 'SDR') {
+            queryArgs.where = { booked_by: session.user.email as string };
+        }
+
+        const meetings = await prisma.meeting.findMany(queryArgs);
+
+        // Fetch user names for "Booked By" column if Admin/Manager
+        const userEmails = [...new Set(meetings.map(m => m.booked_by))];
+        const users = await prisma.user.findMany({
+            where: { email: { in: userEmails } },
+            select: { email: true, name: true }
         });
+        const userMap = new Map();
+        users.forEach(u => userMap.set(u.email, u.name || u.email));
 
         // Map the result to a flatter structure for the frontend if needed
         const mappedMeetings = meetings.map((m: any) => {
-            // "ClinicName - Phone" logic from the payload
             const identityParts = m.lead?.lead_identity?.split(' - ') || [];
             const clinicName = identityParts[0] || 'Unknown';
             const phoneNumber = identityParts[1] || 'Unknown';
@@ -42,6 +64,7 @@ export async function GET() {
                 meeting_time: m.meeting_time,
                 meeting_status: m.meeting_status,
                 meeting_notes: m.meeting_notes,
+                sdr_name: userMap.get(m.booked_by) || m.booked_by,
                 no_show: m.no_show,
                 created_at: m.createdAt
             };

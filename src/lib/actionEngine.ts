@@ -29,13 +29,13 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
 
     // Outcome-Based Automation
     if (outcome === 'Not Picked') {
-        updatedLead.next_action_type = 'Reattempt';
+        updatedLead.next_action_type = 'Reattempt call';
         updatedLead.next_action_date = tomorrowDate;
         updatedLead.touch_count += 1;
         if (updatedLead.lead_status !== 'Disqualified') updatedLead.lead_status = 'Active';
     }
     else if (outcome === 'Assistant picked' || outcome === 'Call back requested') {
-        updatedLead.next_action_type = 'Call follow up';
+        updatedLead.next_action_type = 'Call follow up 1';
         updatedLead.next_action_date = payload.providedNextActionDate || tomorrowDate;
         updatedLead.touch_count += 1;
 
@@ -50,13 +50,13 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
             if (updatedLead.lead_status !== 'Disqualified') updatedLead.lead_status = 'Active';
 
             if (interest === 4) {
-                updatedLead.next_action_type = 'Call follow up';
-                // Prompt: "If (interest level==4) call follow up ... If (whatsapp_sent == true ) touch++"
+                updatedLead.next_action_type = 'Call follow up 1';
                 if (payload.whatsappDetailsSent) {
                     updatedLead.touch_count += 1;
                 }
             } else if (interest === 3) {
-                updatedLead.next_action_type = 'Whatsapp details';
+                updatedLead.next_action_type = 'WhatsApp Follow Up';
+                updatedLead.whatsapp_status = 'Pending';
                 if (payload.whatsappDetailsSent) {
                     updatedLead.touch_count += 1;
                 }
