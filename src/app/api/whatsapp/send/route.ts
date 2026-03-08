@@ -46,11 +46,13 @@ export async function POST(req: Request) {
         // Recalculate priority routing because the Date changed
         tempLead.priority_score = calculatePriorityScore(tempLead);
 
-        // Update DB
+        // Update DB with workflow automation
         const result = await prisma.lead.update({
             where: { id: leadId },
             data: {
                 whatsapp_status: 'Sent',
+                whatsapp_details_sent: true,
+                touch_count: { increment: 1 }, // Manager's action counts as a touch
                 next_action_type: 'Call follow up 1',
                 next_action_date: tomorrowDate,
                 priority_score: tempLead.priority_score,

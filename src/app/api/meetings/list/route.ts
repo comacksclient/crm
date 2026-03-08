@@ -13,7 +13,7 @@ export async function GET() {
 
         const dbUser = await prisma.user.findUnique({
             where: { email: session.user.email as string },
-            select: { role: true, id: true, name: true }
+            select: { role: true, id: true, name: true, team_id: true }
         });
 
         if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -33,10 +33,22 @@ export async function GET() {
             }
         };
 
-        // SDRs strictly only see their OWN bookings
+        // Role-Based Security Hardening
         if (dbUser.role === 'SDR') {
+            // SDRs strictly only see their OWN bookings
             queryArgs.where = { booked_by: session.user.email as string };
+        } else if (dbUser.role === 'MANAGER') {
+            // Managers only see bookings for leads assigned to their team
+            if (!dbUser.team_id) {
+                return NextResponse.json({ meetings: [] });
+            }
+            queryArgs.where = {
+                lead: {
+                    team_id: dbUser.team_id
+                }
+            };
         }
+        // Admins see everything (no 'where' clause needed)
 
         const meetings = await prisma.meeting.findMany(queryArgs);
 

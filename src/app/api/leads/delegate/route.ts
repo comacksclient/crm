@@ -19,10 +19,25 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Forbidden: Admins Only.' }, { status: 403 });
         }
 
-        const { leadIds, teamId } = await req.json();
+        const { leadIds, teamId, managerId, sdrId } = await req.json();
 
         if (!leadIds || !Array.isArray(leadIds) || leadIds.length === 0 || !teamId) {
             return NextResponse.json({ error: 'Missing or invalid payload data: leadIds array and teamId required.' }, { status: 400 });
+        }
+
+        // Prepare assignment metadata if an SDR is explicitly selected
+        let assignedTo = null;
+        let assignedDate = null;
+
+        if (sdrId) {
+            const sdrUser = await prisma.user.findUnique({
+                where: { id: sdrId },
+                select: { name: true, email: true }
+            });
+            if (sdrUser) {
+                assignedTo = sdrUser.name || sdrUser.email;
+                assignedDate = new Date().toISOString();
+            }
         }
 
         // Delegate these raw leads completely to the specified team
@@ -32,9 +47,10 @@ export async function POST(req: Request) {
             },
             data: {
                 team_id: teamId,
-                // Make sure they drop any legacy assignments if they were weirdly dirty
-                sdr_id: null,
-                manager_id: null
+                manager_id: managerId || null,
+                sdr_id: sdrId || null,
+                assigned_to: assignedTo,
+                assigned_date: assignedDate
             }
         });
 
