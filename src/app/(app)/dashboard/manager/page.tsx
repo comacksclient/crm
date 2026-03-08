@@ -205,24 +205,52 @@ export default function ManagerDashboard() {
             <div className="max-w-7xl mx-auto space-y-6">
 
                 {/* Header */}
-                <div className="flex justify-between items-center flex-wrap gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            <BriefcaseMedical className="h-6 w-6 text-indigo-600" />
-                            Manager Assignment Desk
-                        </h1>
-                        <p className="text-sm text-slate-500 mt-1">Select raw active leads given to your Team framework and assign them directly to your SDRs.</p>
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <BriefcaseMedical className="h-6 w-6 text-indigo-600" />
+                                Manager Assignment Desk
+                            </h1>
+                            <p className="text-sm text-slate-500 mt-1">Select raw active leads given to your Team framework and assign them directly to your SDRs.</p>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowDistributeModal(true)}
+                                className="text-amber-600 border-amber-200 hover:bg-amber-50 gap-2"
+                            >
+                                <Zap className="h-4 w-4 fill-amber-500" />
+                                Turbo Distribute
+                            </Button>
+                        </div>
                     </div>
 
-                    <div className="flex items-center gap-3">
-                        <Button
-                            variant="outline"
-                            onClick={() => setShowDistributeModal(true)}
-                            className="text-amber-600 border-amber-200 hover:bg-amber-50 gap-2"
-                        >
-                            <Zap className="h-4 w-4 fill-amber-500" />
-                            Turbo Distribute
-                        </Button>
+                    {/* Operational Guide */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                        <div className="p-4 rounded-lg bg-indigo-50/50 border border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-900/30">
+                            <div className="flex items-center gap-2 mb-2">
+                                <BriefcaseMedical className="h-4 w-4 text-indigo-600" />
+                                <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">Targeted Assignment (Manual)</h3>
+                            </div>
+                            <p className="text-xs text-indigo-800/70 dark:text-indigo-400">
+                                <b>Example:</b> You have 10 VIP leads from <i>Delhi</i>. You select them and assign them specifically to "SDR Karan Patel".
+                                <br /><br />
+                                <span className="italic">Use this to matching specific leads with your best performing callers.</span>
+                            </p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-amber-50/50 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/30">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Zap className="h-4 w-4 text-amber-600 fill-amber-500" />
+                                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300">Turbo Distribute (Automated)</h3>
+                            </div>
+                            <p className="text-xs text-amber-800/70 dark:text-indigo-400">
+                                <b>Example:</b> You have 500 leads and 4 SDRs. You want to give them 125 each. Set "125" and click <b>"Distribute Now"</b>.
+                                <br /><br />
+                                <span className="italic">The system instantly splits the leads and delivers them to the SDRs' individual queues.</span>
+                            </p>
+                        </div>
                     </div>
                 </div>
 

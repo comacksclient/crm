@@ -15,7 +15,8 @@ import {
     Menu,
     X,
     Target,
-    ClipboardList
+    ClipboardList,
+    MessageCircle
 } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -45,8 +46,10 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
             menu.unshift({ name: 'Lead Delegation', href: '/dashboard/admin/delegation', icon: Target });
             menu.unshift({ name: 'Assigned Leads', href: '/dashboard/admin/assigned', icon: ClipboardList });
             menu.unshift({ name: 'Global Roster', href: '/dashboard/admin/users', icon: Briefcase });
+            menu.unshift({ name: 'WhatsApp Follow-Up', href: '/dashboard/whatsapp', icon: MessageCircle });
         } else if (user.role === 'MANAGER') {
             menu.unshift({ name: 'Assigned Leads', href: '/dashboard/admin/assigned', icon: ClipboardList });
+            menu.unshift({ name: 'WhatsApp Follow-Up', href: '/dashboard/whatsapp', icon: MessageCircle });
             menu.unshift({ name: 'Team Engine', href: '/dashboard/manager', icon: Briefcase });
         }
 

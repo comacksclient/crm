@@ -24,8 +24,23 @@ export async function DELETE(req: Request) {
             return NextResponse.json({ error: 'Missing or invalid payload data: leadIds array required.' }, { status: 400 });
         }
 
-        // Technically, a secure system verifies the Manager actually "owns" those Leads before deleting,
-        // but for now, we rely on the UI only showing them what they're allowed to delete.
+        // Production-Grade Security: Verify Team Boundaries for Managers
+        if (dbUser.role === 'MANAGER') {
+            if (!dbUser.team_id) {
+                return NextResponse.json({ error: 'Managers must be assigned to a Team to purge leads.' }, { status: 403 });
+            }
+
+            const validLeadsCount = await prisma.lead.count({
+                where: {
+                    id: { in: leadIds },
+                    team_id: dbUser.team_id
+                }
+            });
+
+            if (validLeadsCount !== leadIds.length) {
+                return NextResponse.json({ error: 'Security Violation: Cannot purge leads outside your Team block.' }, { status: 403 });
+            }
+        }
 
         // Execute the hard delete
         const deleteResult = await prisma.lead.deleteMany({

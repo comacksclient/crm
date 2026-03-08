@@ -13,7 +13,7 @@ export async function POST(req: Request) {
 
         const dbUser = await prisma.user.findUnique({
             where: { email: session.user.email as string },
-            select: { id: true, role: true, name: true, email: true }
+            select: { id: true, role: true, name: true, email: true, team_id: true }
         });
 
         if (!dbUser || (dbUser.role !== 'MANAGER' && dbUser.role !== 'ADMIN')) {
@@ -26,8 +26,35 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Missing or invalid payload data: leadIds array and sdrId required.' }, { status: 400 });
         }
 
-        // Technically, a secure system verifies the Manager actually "owns" those City leads before assigning, 
-        // but for now, we rely on the UI only showing them what they're allowed to assign.
+        // Production-Grade Security: Verify Team Boundaries
+        if (dbUser.role === 'MANAGER') {
+            if (!dbUser.team_id) {
+                return NextResponse.json({ error: 'Managers must be assigned to a Team to allocate leads.' }, { status: 403 });
+            }
+
+            // 1. Verify target SDR belongs to the same team
+            const targetSdr = await prisma.user.findUnique({
+                where: { id: sdrId },
+                select: { team_id: true }
+            });
+
+            if (!targetSdr || targetSdr.team_id !== dbUser.team_id) {
+                return NextResponse.json({ error: 'Security Violation: Cannot assign leads to an SDR outside your Team.' }, { status: 403 });
+            }
+
+            // 2. Verify all Leads belong to the same team
+            const validLeadsCount = await prisma.lead.count({
+                where: {
+                    id: { in: leadIds },
+                    team_id: dbUser.team_id
+                }
+            });
+
+            if (validLeadsCount !== leadIds.length) {
+                return NextResponse.json({ error: 'Security Violation: One or more leads do not belong to your Team block.' }, { status: 403 });
+            }
+        }
+
         // Update all Leads to belong to this SDR, and also record who the allocating Manager was.
         const updateResult = await prisma.lead.updateMany({
             where: {

@@ -61,13 +61,13 @@ export async function GET(req: Request) {
             });
         }
 
-        // Default: Leads Export (Active Pipeline)
+        // Leads Export (Master Database Dump)
         const allLeads = await prisma.lead.findMany({
-            where: { lead_status: 'Active' },
             include: {
                 team: { select: { name: true } }
             },
             orderBy: [
+                { lead_status: 'asc' }, // Group by status
                 { priority_score: 'desc' },
                 { createdAt: 'desc' }
             ]

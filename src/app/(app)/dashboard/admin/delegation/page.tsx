@@ -24,6 +24,14 @@ interface Team {
     name: string;
 }
 
+interface User {
+    id: string;
+    name: string | null;
+    email: string;
+    role: string;
+    team_id: string | null;
+}
+
 export default function AdminDelegationDesk() {
     const [leads, setLeads] = useState<UnassignedLead[]>([]);
     const [teams, setTeams] = useState<Team[]>([]);
@@ -32,8 +40,13 @@ export default function AdminDelegationDesk() {
 
     const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
     const [selectedTeam, setSelectedTeam] = useState<string>('');
+    const [selectedManager, setSelectedManager] = useState<string>('');
+    const [selectedSdr, setSelectedSdr] = useState<string>('');
     const [assigning, setAssigning] = useState(false);
     const [profile, setProfile] = useState<{ role: string, teamName: string } | null>(null);
+
+    const [allUsers, setAllUsers] = useState<User[]>([]);
+    const [loadingUsers, setLoadingUsers] = useState(true);
 
     const [showDistributeModal, setShowDistributeModal] = useState(false);
     const [distributeCount, setDistributeCount] = useState('100');
@@ -55,6 +68,7 @@ export default function AdminDelegationDesk() {
     const fetchData = async () => {
         setLoadingLeads(true);
         setLoadingTeams(true);
+        setLoadingUsers(true);
 
         try {
             // Fetch raw uncharted leads
@@ -72,11 +86,19 @@ export default function AdminDelegationDesk() {
                 const data = await resTeams.json();
                 setTeams(data.teams || []);
             }
+
+            // Fetch all platform users
+            const resUsers = await fetch('/api/users/list');
+            if (resUsers.ok) {
+                const data = await resUsers.json();
+                setAllUsers(data.users || []);
+            }
         } catch (e) {
             toast.error('Network error fetching pipeline data');
         } finally {
             setLoadingLeads(false);
             setLoadingTeams(false);
+            setLoadingUsers(false);
         }
     };
 
@@ -112,7 +134,9 @@ export default function AdminDelegationDesk() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     leadIds: Array.from(selectedLeads),
-                    teamId: selectedTeam
+                    teamId: selectedTeam,
+                    managerId: selectedManager !== 'none' ? selectedManager : null,
+                    sdrId: selectedSdr !== 'none' ? selectedSdr : null
                 })
             });
 
@@ -120,6 +144,8 @@ export default function AdminDelegationDesk() {
                 const data = await res.json();
                 toast.success(`Successfully pushed ${data.count} leads to the selected Team!`);
                 setSelectedLeads(new Set());
+                setSelectedManager('');
+                setSelectedSdr('');
                 fetchData(); // Refresh remaining unassigned queue
             } else {
                 const data = await res.json();
@@ -173,21 +199,49 @@ export default function AdminDelegationDesk() {
             <div className="max-w-7xl mx-auto space-y-6">
 
                 {/* Header */}
-                <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            <ArrowRightCircle className="h-6 w-6 text-indigo-600" />
-                            Admin Delegation Desk
-                        </h1>
-                        <p className="text-sm text-slate-500 mt-1">Push uploaded raw leads downward into specific Corporate Teams.</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
-                            <UserCircle2 className="h-4 w-4 text-indigo-500" />
-                            Current Team: {profile?.teamName || '...'}
+                <div className="bg-white dark:bg-slate-900 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 space-y-6">
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                                <ArrowRightCircle className="h-6 w-6 text-indigo-600" />
+                                Admin Delegation Desk
+                            </h1>
+                            <p className="text-sm text-slate-500 mt-1">Push uploaded raw leads downward into specific Corporate Teams.</p>
                         </div>
-                        <div className="flex gap-2">
-                            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 border-indigo-200 capitalize">{profile?.role.toLowerCase() || '...'}</Badge>
+                        <div className="flex flex-col items-end gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                <UserCircle2 className="h-4 w-4 text-indigo-500" />
+                                Current Team: {profile?.teamName || '...'}
+                            </div>
+                            <div className="flex gap-2">
+                                <Badge variant="outline" className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 border-indigo-200 capitalize">{profile?.role.toLowerCase() || '...'}</Badge>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Operational Guide */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 rounded-lg bg-indigo-50/50 border border-indigo-100 dark:bg-indigo-950/20 dark:border-indigo-900/30">
+                            <div className="flex items-center gap-2 mb-2">
+                                <ArrowRightCircle className="h-4 w-4 text-indigo-600" />
+                                <h3 className="text-sm font-bold text-indigo-900 dark:text-indigo-300">Push to Team (Manual)</h3>
+                            </div>
+                            <p className="text-xs text-indigo-800/70 dark:text-indigo-400">
+                                <b>Example:</b> You uploaded 50 leads from <i>Mumbai</i>. You select those 50 and click <b>"Push to Team"</b> for the "West Squad".
+                                <br /><br />
+                                <span className="italic">Use this to hand-pick specific regions or high-priority accounts for specific teams.</span>
+                            </p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-amber-50/50 border border-amber-100 dark:bg-amber-950/20 dark:border-amber-900/30">
+                            <div className="flex items-center gap-2 mb-2">
+                                <Zap className="h-4 w-4 text-amber-600 fill-amber-500" />
+                                <h3 className="text-sm font-bold text-amber-900 dark:text-amber-300">Turbo Distribute (Automated)</h3>
+                            </div>
+                            <p className="text-xs text-amber-800/70 dark:text-indigo-400">
+                                <b>Example:</b> You want 10 SDRs in "Alpha Squad" to have 100 leads each. You set "100" and click <b>"Turbo Distribute"</b>.
+                                <br /><br />
+                                <span className="italic">The system automatically pulls 1,000 top-priority leads and splits them instantly across the squad.</span>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -208,40 +262,90 @@ export default function AdminDelegationDesk() {
                     </div>
 
                     <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <Select value={selectedTeam} onValueChange={setSelectedTeam}>
-                            <SelectTrigger className="w-[250px] bg-white dark:bg-slate-900 font-medium">
-                                <SelectValue placeholder="Select Target Team..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {loadingTeams ? (
-                                    <SelectItem value="loading" disabled>Loading Teams...</SelectItem>
-                                ) : teams.length === 0 ? (
-                                    <SelectItem value="none" disabled>No Teams Formed Yet</SelectItem>
-                                ) : (
-                                    teams.map(t => (
-                                        <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                    ))
-                                )}
-                            </SelectContent>
-                        </Select>
+                        <div className="flex flex-col gap-1">
+                            <Label className="text-[10px] text-slate-400 font-bold uppercase ml-1">1. Target Team</Label>
+                            <Select value={selectedTeam} onValueChange={(val) => { setSelectedTeam(val); setSelectedManager(''); setSelectedSdr(''); }}>
+                                <SelectTrigger className="w-[180px] bg-white dark:bg-slate-900 font-medium">
+                                    <SelectValue placeholder="Select Team..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {loadingTeams ? (
+                                        <SelectItem value="loading" disabled>Loading Teams...</SelectItem>
+                                    ) : teams.length === 0 ? (
+                                        <SelectItem value="none" disabled>No Teams Found</SelectItem>
+                                    ) : (
+                                        teams.map(t => (
+                                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                        ))
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                        <Button
-                            onClick={() => setShowDistributeModal(true)}
-                            variant="outline"
-                            className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 gap-2"
-                        >
-                            <Zap className="h-4 w-4 fill-amber-500" />
-                            Turbo Distribute
-                        </Button>
+                        <div className="flex flex-col gap-1">
+                            <Label className="text-[10px] text-slate-400 font-bold uppercase ml-1">2. Target Manager (Optional)</Label>
+                            <Select
+                                value={selectedManager}
+                                onValueChange={setSelectedManager}
+                                disabled={!selectedTeam}
+                            >
+                                <SelectTrigger className="w-[180px] bg-white dark:bg-slate-900 font-medium disabled:opacity-50">
+                                    <SelectValue placeholder="Skip / Team Default" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none" className="italic text-slate-500">None / Skip</SelectItem>
+                                    {allUsers
+                                        .filter(u => u.team_id === selectedTeam && u.role === 'MANAGER')
+                                        .map(u => (
+                                            <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                                        ))
+                                    }
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                        <Button
-                            onClick={handleDelegate}
-                            disabled={assigning || selectedLeads.size === 0 || !selectedTeam}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[160px] shadow-sm"
-                        >
-                            {assigning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Push to Team
-                        </Button>
+                        <div className="flex flex-col gap-1">
+                            <Label className="text-[10px] text-slate-400 font-bold uppercase ml-1">3. Target SDR (Optional)</Label>
+                            <Select
+                                value={selectedSdr}
+                                onValueChange={setSelectedSdr}
+                                disabled={!selectedTeam}
+                            >
+                                <SelectTrigger className="w-[180px] bg-white dark:bg-slate-900 font-medium disabled:opacity-50">
+                                    <SelectValue placeholder="Skip / Team Default" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none" className="italic text-slate-500">None / Skip</SelectItem>
+                                    {allUsers
+                                        .filter(u => u.team_id === selectedTeam && u.role === 'SDR')
+                                        .map(u => (
+                                            <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                                        ))
+                                    }
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex items-center gap-2 pt-5">
+                            <Button
+                                onClick={() => setShowDistributeModal(true)}
+                                variant="outline"
+                                disabled={!selectedTeam}
+                                className="bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200 h-9 px-3"
+                                title="Turbo Distribute into this Team"
+                            >
+                                <Zap className="h-4 w-4 fill-amber-500" />
+                            </Button>
+
+                            <Button
+                                onClick={handleDelegate}
+                                disabled={assigning || selectedLeads.size === 0 || !selectedTeam}
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[120px] shadow-sm h-9"
+                            >
+                                {assigning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                Push to Team
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

@@ -75,6 +75,7 @@ model Lead {
   // Automated Follow-Ups
   next_action_type      String? @default("New")
   whatsapp_details_sent Boolean @default(false)
+  whatsapp_status       String  @default("Pending") // Pending, Sent
   next_action_date      String? // Formatted YYYY-MM-DD
   last_call_date        String?
   touch_count           Int     @default(0)
