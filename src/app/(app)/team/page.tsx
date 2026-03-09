@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import {
     Users,
     UserCircle2,
@@ -41,6 +42,7 @@ interface TeamData {
 export default function MyTeamPage() {
     const [data, setData] = useState<TeamData | null>(null);
     const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
 
     useEffect(() => {
         fetchTeamData();
@@ -57,6 +59,51 @@ export default function MyTeamPage() {
             console.error("Failed to fetch team data");
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleLeaveTeam = async () => {
+        if (!confirm("Are you sure you want to leave this team? Any active leads currently assigned to you will be released back to the team pool.")) return;
+
+        setActionLoading('leave');
+        try {
+            const res = await fetch('/api/teams/leave', { method: 'POST' });
+            if (res.ok) {
+                toast.success('Successfully left the team.');
+                fetchTeamData(); // Refresh to show unassigned state
+            } else {
+                const err = await res.json();
+                toast.error(err.error || 'Failed to leave team.');
+            }
+        } catch (e) {
+            toast.error('Network error while leaving team.');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleRemoveMember = async (userId: string, name: string | null) => {
+        if (!confirm(`Are you sure you want to remove ${name || 'this user'} from the team? Their active leads will be released back to the team pool.`)) return;
+
+        setActionLoading(userId);
+        try {
+            const res = await fetch('/api/teams/remove', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: userId })
+            });
+
+            if (res.ok) {
+                toast.success('Member removed successfully.');
+                fetchTeamData(); // Refresh roster
+            } else {
+                const err = await res.json();
+                toast.error(err.error || 'Failed to remove member.');
+            }
+        } catch (e) {
+            toast.error('Network error during member removal.');
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -104,14 +151,22 @@ export default function MyTeamPage() {
                                 <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white mb-1">
                                     {data.team?.name}
                                 </h1>
-                                <p className="text-slate-500 font-medium flex items-center gap-2">
+                                <p className="text-slate-500 font-medium flex items-center gap-2 mb-3">
                                     <CalendarDays className="h-4 w-4" />
                                     Formed {data.team?.createdAt ? format(new Date(data.team.createdAt), 'MMMM yyyy') : 'Recently'}
                                 </p>
+                                <button
+                                    onClick={handleLeaveTeam}
+                                    disabled={actionLoading === 'leave'}
+                                    className="text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 rounded transition-colors disabled:opacity-50 flex items-center gap-2 w-fit"
+                                >
+                                    {actionLoading === 'leave' && <Loader2 className="h-3 w-3 animate-spin" />}
+                                    Leave Team
+                                </button>
                             </div>
                         </div>
 
-                        <div className="flex items-basline gap-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700 w-fit">
+                        <div className="flex items-baseline gap-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700 w-fit">
                             <div className="text-center">
                                 <div className="text-3xl font-black text-slate-800 dark:text-slate-100">{data.managers?.length || 0}</div>
                                 <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Managers</div>
@@ -151,7 +206,18 @@ export default function MyTeamPage() {
                                                 </p>
                                                 <p className="text-xs text-slate-500 truncate">{manager.email}</p>
                                             </div>
-                                            <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50">{manager.role}</Badge>
+                                            <div className="flex flex-col items-end gap-2">
+                                                <Badge variant="outline" className="border-emerald-200 text-emerald-700 bg-emerald-50">{manager.role}</Badge>
+                                                {data.currentUser?.role === 'ADMIN' && manager.id !== data.currentUser?.id && (
+                                                    <button
+                                                        onClick={() => handleRemoveMember(manager.id, manager.name)}
+                                                        disabled={actionLoading === manager.id}
+                                                        className="text-[10px] text-rose-500 hover:text-rose-700 hover:underline flex items-center gap-1 disabled:opacity-50"
+                                                    >
+                                                        {actionLoading === manager.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Remove'}
+                                                    </button>
+                                                )}
+                                            </div>
                                         </CardContent>
                                     </Card>
                                 ))}
@@ -176,8 +242,8 @@ export default function MyTeamPage() {
                                     <Card
                                         key={sdr.id}
                                         className={`transition-all duration-200 ${sdr.id === data.currentUser?.id
-                                                ? 'border-indigo-300 dark:border-indigo-700 shadow-md bg-indigo-50/30 dark:bg-indigo-900/10'
-                                                : 'border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900'
+                                            ? 'border-indigo-300 dark:border-indigo-700 shadow-md bg-indigo-50/30 dark:bg-indigo-900/10'
+                                            : 'border-slate-200 dark:border-slate-800 shadow-sm bg-white dark:bg-slate-900'
                                             }`}
                                     >
                                         <CardContent className="p-4 flex items-start gap-4">
@@ -194,9 +260,21 @@ export default function MyTeamPage() {
                                                 </p>
                                                 <p className="text-xs text-slate-500 truncate mb-2">{sdr.email}</p>
 
-                                                <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-wider">
-                                                    <div className={`w-1.5 h-1.5 rounded-full ${sdr.id === data.currentUser?.id ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`}></div>
-                                                    SDR Operator
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-1.5 text-[10px] font-medium text-slate-400 uppercase tracking-wider">
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${sdr.id === data.currentUser?.id ? 'bg-indigo-500 animate-pulse' : 'bg-slate-300'}`}></div>
+                                                        SDR Operator
+                                                    </div>
+
+                                                    {(data.currentUser?.role === 'MANAGER' || data.currentUser?.role === 'ADMIN') && sdr.id !== data.currentUser?.id && (
+                                                        <button
+                                                            onClick={() => handleRemoveMember(sdr.id, sdr.name)}
+                                                            disabled={actionLoading === sdr.id}
+                                                            className="text-[10px] text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                                                        >
+                                                            {actionLoading === sdr.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Remove'}
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
                                         </CardContent>
