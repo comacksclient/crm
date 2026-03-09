@@ -51,6 +51,7 @@ export default function AdminDelegationDesk() {
     const [showDistributeModal, setShowDistributeModal] = useState(false);
     const [distributeCount, setDistributeCount] = useState('100');
     const [distributing, setDistributing] = useState(false);
+    const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -191,6 +192,40 @@ export default function AdminDelegationDesk() {
             toast.error('Network error during lead distribution');
         } finally {
             setDistributing(false);
+        }
+    };
+
+    const handleDelete = async () => {
+        if (selectedLeads.size === 0) {
+            toast.error("Please select at least one lead to delete.");
+            return;
+        }
+
+        if (!confirm(`CRITICAL WARNING: You are about to permanently delete ${selectedLeads.size} leads from the database. This action cannot be undone. Are you absolutely sure?`)) {
+            return;
+        }
+
+        setDeleting(true);
+        try {
+            const res = await fetch('/api/leads/purge', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leadIds: Array.from(selectedLeads) })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message || `Successfully purged ${selectedLeads.size} leads.`);
+                setSelectedLeads(new Set());
+                fetchData(); // Refresh queue
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to delete leads');
+            }
+        } catch (e) {
+            toast.error('Network error during deletion');
+        } finally {
+            setDeleting(false);
         }
     };
 
@@ -344,6 +379,18 @@ export default function AdminDelegationDesk() {
                             >
                                 {assigning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                 Push to Team
+                            </Button>
+
+                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+
+                            <Button
+                                variant="outline"
+                                onClick={handleDelete}
+                                disabled={deleting || selectedLeads.size === 0}
+                                className="bg-rose-50 text-rose-700 hover:bg-rose-100 border-rose-200 h-9 px-3 disabled:opacity-50"
+                                title="Permanently Delete Selected Leads"
+                            >
+                                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Delete Selected'}
                             </Button>
                         </div>
                     </div>
