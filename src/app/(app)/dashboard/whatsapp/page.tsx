@@ -80,7 +80,7 @@ export default function WhatsAppDesk() {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-emerald-900 dark:text-emerald-500 flex items-center gap-2">
                             <MessageCircle className="h-6 w-6 text-emerald-600" />
-                            WhatsApp Broadcast Tracker
+                            WhatsApp Broadcast Hub
                         </h1>
                         <p className="text-sm text-emerald-700/70 dark:text-emerald-400/60 mt-1">Pending leads requiring custom messaging. Actioning these will automatically assign them back to the SDR's queue for Tomorrow.</p>
                     </div>

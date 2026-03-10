@@ -35,22 +35,22 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
     const getNavigationMenu = () => {
         // Shared items
         const menu = [
-            { name: 'Call Engine (CRM)', href: '/queue', icon: PhoneCall },
-            { name: 'Booked Meetings', href: '/meetings', icon: CalendarDays },
-            { name: 'My Team', href: '/team', icon: Users },
+            { name: 'CRM Dashboard', href: '/queue', icon: PhoneCall },
+            { name: 'Scheduled Appointments', href: '/meetings', icon: CalendarDays },
+            { name: 'Team Directory', href: '/team', icon: Users },
         ];
 
         // Role-specific items
         if (user.role === 'ADMIN') {
-            menu.unshift({ name: 'System Setup', href: '/dashboard/admin', icon: Settings });
-            menu.unshift({ name: 'Lead Delegation', href: '/dashboard/admin/delegation', icon: Target });
-            menu.unshift({ name: 'Assigned Leads', href: '/dashboard/admin/assigned', icon: ClipboardList });
-            menu.unshift({ name: 'Global Roster', href: '/dashboard/admin/users', icon: Briefcase });
-            menu.unshift({ name: 'WhatsApp Follow-Up', href: '/dashboard/whatsapp', icon: MessageCircle });
+            menu.unshift({ name: 'Admin Control Panel', href: '/dashboard/admin', icon: Settings });
+            menu.unshift({ name: 'Lead DistributionCenter', href: '/dashboard/admin/delegation', icon: Target });
+            menu.unshift({ name: 'Master Lead Registry', href: '/dashboard/admin/assigned', icon: ClipboardList });
+            menu.unshift({ name: 'Staff Management', href: '/dashboard/admin/users', icon: Briefcase });
+            menu.unshift({ name: 'WhatsApp Broadcast Hub', href: '/dashboard/whatsapp', icon: MessageCircle });
         } else if (user.role === 'MANAGER') {
-            menu.unshift({ name: 'Assigned Leads', href: '/dashboard/admin/assigned', icon: ClipboardList });
-            menu.unshift({ name: 'WhatsApp Follow-Up', href: '/dashboard/whatsapp', icon: MessageCircle });
-            menu.unshift({ name: 'Team Engine', href: '/dashboard/manager', icon: Briefcase });
+            menu.unshift({ name: 'Master Lead Registry', href: '/dashboard/admin/assigned', icon: ClipboardList });
+            menu.unshift({ name: 'WhatsApp Broadcast Hub', href: '/dashboard/whatsapp', icon: MessageCircle });
+            menu.unshift({ name: 'Team Management Engine', href: '/dashboard/manager', icon: Briefcase });
         }
 
         return menu;
@@ -81,7 +81,7 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
                         <div className="h-8 w-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(79,70,229,0.5)]">
                             <Target className="h-5 w-5 text-white" />
                         </div>
-                        <span className="text-lg font-bold text-white tracking-tight">SmartQueue CRM</span>
+                        <span className="text-lg font-bold text-white tracking-tight">ComacksPro </span>
                     </div>
                     <button onClick={() => setIsMobileMenuOpen(false)} className="lg:hidden text-slate-400 hover:text-white">
                         <X className="h-5 w-5" />
@@ -100,7 +100,7 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
                 </div>
 
                 {/* Navigation Links */}
-                <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+                <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto no-scrollbar">
                     <div className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 ml-2">Navigation</div>
                     {navigation.map((item) => {
                         const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -143,7 +143,7 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
                 <header className="lg:hidden flex items-center justify-between h-16 px-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
                     <div className="flex items-center gap-2">
                         <Target className="h-6 w-6 text-indigo-600" />
-                        <span className="font-bold text-slate-900 dark:text-white">SmartQueue</span>
+                        <span className="font-bold text-slate-900 dark:text-white">ComacksPro</span>
                     </div>
                     <button
                         onClick={() => setIsMobileMenuOpen(true)}
@@ -154,7 +154,7 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
                 </header>
 
                 {/* Page Content */}
-                <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-950">
+                <div className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-950 no-scrollbar">
                     {children}
                 </div>
             </main>

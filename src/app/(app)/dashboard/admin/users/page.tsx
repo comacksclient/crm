@@ -189,7 +189,7 @@ export default function UsersManagementPage() {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <Users className="h-6 w-6 text-indigo-600" />
-                            Team Control & Membership
+                            Internal Staff Roster
                         </h1>
                         <p className="text-sm text-slate-500 mt-1">View your corporate team and operational membership.</p>
                     </div>

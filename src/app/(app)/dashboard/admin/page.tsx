@@ -227,7 +227,7 @@ export default function AdminDashboard() {
             <div className="max-w-6xl mx-auto space-y-6">
                 <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">System Setup</h1>
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Admin Control Panel</h1>
                         <p className="text-slate-500 text-sm">Sheet configuration and data ingestion</p>
                     </div>
                     <div className="flex flex-col items-end gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-100 dark:border-slate-700">

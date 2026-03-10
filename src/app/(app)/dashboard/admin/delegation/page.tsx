@@ -239,7 +239,7 @@ export default function AdminDelegationDesk() {
                         <div>
                             <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
                                 <ArrowRightCircle className="h-6 w-6 text-indigo-600" />
-                                Admin Delegation Desk
+                                Lead Distribution Center
                             </h1>
                             <p className="text-sm text-slate-500 mt-1">Push uploaded raw leads downward into specific Corporate Teams.</p>
                         </div>

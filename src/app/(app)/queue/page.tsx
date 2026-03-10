@@ -11,13 +11,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { signOut } from 'next-auth/react';
 import { format } from 'date-fns';
-import { Trash2, Edit, Loader2, CheckCircle2, X, LogOut } from 'lucide-react';
+import { Trash2, Edit, Loader2, CheckCircle2, X, LogOut, Search } from 'lucide-react';
 
 export default function QueuePage() {
     const [leads, setLeads] = useState<Lead[]>([]);
     const [teamName, setTeamName] = useState<string | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Modal & Form State
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
@@ -185,15 +186,27 @@ export default function QueuePage() {
         }
     };
 
+    const filteredLeads = leads.filter(lead => {
+        if (!searchQuery) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+            (lead.clinic_name?.toLowerCase().includes(q)) ||
+            (lead.lead_identity?.toLowerCase().includes(q)) ||
+            (lead.city?.toLowerCase().includes(q)) ||
+            (lead.phone_number?.toLowerCase().includes(q)) ||
+            (lead.assignment_info?.toLowerCase().includes(q))
+        );
+    });
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 relative">
             <div className="max-w-7xl mx-auto space-y-6">
 
                 {/* Header */}
-                <div className="flex justify-between items-center bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            CRM Table View
+                            Lead Outreach Queue
                             {teamName && (
                                 <span className="text-xs font-normal px-2 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800">
                                     {teamName}
@@ -201,6 +214,16 @@ export default function QueuePage() {
                             )}
                         </h1>
                         <p className="text-sm text-slate-500">View and log interactions for your assigned leads. Sorted by priority.</p>
+                    </div>
+
+                    <div className="w-full md:w-72 relative">
+                        <Input
+                            placeholder="Search clinic, city, or phone..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                        />
+                        <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                     </div>
                 </div>
 
@@ -236,17 +259,21 @@ export default function QueuePage() {
                                                     <Loader2 className="h-6 w-6 text-slate-400" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">No leads assigned to you yet</p>
+                                                    <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">No leads found</p>
                                                     <p className="text-sm text-slate-500 max-w-md mx-auto">
-                                                        You are currently in the <b>{teamName}</b> team.
-                                                        Wait for your Manager to assign leads to your queue or ask them to use the "Turbo Distribute" tool.
+                                                        {searchQuery ? "Your search didn't match any leads in the current queue." : (
+                                                            <>
+                                                                You are currently in the <b>{teamName}</b> team.
+                                                                Wait for your Manager to assign leads to your queue or ask them to use the "Turbo Distribute" tool.
+                                                            </>
+                                                        )}
                                                     </p>
                                                 </div>
                                             </div>
                                         </td>
                                     </tr>
                                 ) : (
-                                    leads.map((lead, idx) => {
+                                    filteredLeads.map((lead, idx) => {
                                         const isOverdue = lead.next_action_date && new Date(lead.next_action_date) < new Date(new Date().setHours(0, 0, 0, 0));
                                         return (
                                             <tr

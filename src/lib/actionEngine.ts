@@ -49,14 +49,10 @@ export function runActionEngine(lead: Lead, payload: CallLogPayload): Lead {
             updatedLead.next_action_date = todayDate;
             if (updatedLead.lead_status !== 'Disqualified') updatedLead.lead_status = 'Active';
 
-            if (interest === 4) {
-                updatedLead.next_action_type = 'Call follow up 1';
-                if (payload.whatsappDetailsSent) {
-                    updatedLead.touch_count += 1;
-                }
-            } else if (interest === 3) {
+            if (interest === 4 || interest === 3) {
                 updatedLead.next_action_type = 'WhatsApp Follow Up';
                 updatedLead.whatsapp_status = 'Pending';
+
                 if (payload.whatsappDetailsSent) {
                     updatedLead.touch_count += 1;
                 }
