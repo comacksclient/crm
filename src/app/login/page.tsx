@@ -20,7 +20,7 @@ export default function LoginPage() {
             <Card className="w-full max-w-md shadow-xl border-slate-200 dark:border-slate-800">
                 <CardHeader className="space-y-2 text-center pb-6">
                     <CardTitle className="text-3xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-                        Outbound CRM
+                        ComacksPro
                     </CardTitle>
                     <CardDescription className="text-slate-500 dark:text-slate-400">
                         Sign in with Google to access your tasks

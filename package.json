@@ -1,5 +1,5 @@
 {
-  "name": "crm",
+  "name": "comackspro",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -11,6 +11,7 @@
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
     "@prisma/client": "^5.22.0",
+    "@radix-ui/react-dialog": "^1.1.15",
     "@types/papaparse": "^5.5.2",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",

@@ -103,7 +103,7 @@ export default function AssignedLeadsPage() {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <Users className="h-6 w-6 text-indigo-600" />
-                            Assigned Leads Matrix
+                            Master Lead Registry
                         </h1>
                         <p className="text-sm text-slate-500 mt-1">Global view of strictly assigned operational active and disqualified leads.</p>
                     </div>
