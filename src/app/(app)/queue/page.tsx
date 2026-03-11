@@ -37,6 +37,7 @@ export default function QueuePage() {
     const [editClinicName, setEditClinicName] = useState('');
     const [editCity, setEditCity] = useState('');
     const [editPhone, setEditPhone] = useState('');
+    const [editNextActionDate, setEditNextActionDate] = useState('');
     const [savingEdit, setSavingEdit] = useState(false);
 
     useEffect(() => {
@@ -151,6 +152,7 @@ export default function QueuePage() {
         setEditClinicName(lead.clinic_name || lead.lead_identity.split(' - ')[0] || '');
         setEditCity(lead.city || lead.assignment_info?.split(' - ')[0] || '');
         setEditPhone(lead.phone_number || lead.lead_identity.split(' - ')[1] || '');
+        setEditNextActionDate(lead.next_action_date || '');
     };
 
     const handleSaveEdit = async (e: React.FormEvent) => {
@@ -167,7 +169,8 @@ export default function QueuePage() {
                     clinic_name: editClinicName,
                     city: editCity,
                     phone_number: editPhone,
-                    lead_identity: `${editClinicName} - ${editPhone}`
+                    lead_identity: `${editClinicName} - ${editPhone}`,
+                    next_action_date: editNextActionDate || null
                 })
             });
 
@@ -185,6 +188,8 @@ export default function QueuePage() {
             setSavingEdit(false);
         }
     };
+
+// handleSaveReschedule removed
 
     const filteredLeads = leads.filter(lead => {
         if (!searchQuery) return true;
@@ -206,7 +211,7 @@ export default function QueuePage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            Lead Outreach Queue
+                            Crm Dashboard
                             {teamName && (
                                 <span className="text-xs font-normal px-2 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800">
                                     {teamName}
@@ -498,6 +503,10 @@ export default function QueuePage() {
                             <div className="space-y-2">
                                 <Label htmlFor="editCity">City</Label>
                                 <Input id="editCity" value={editCity} onChange={(e) => setEditCity(e.target.value)} required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="editNextActionDate">Next Action Date</Label>
+                                <Input id="editNextActionDate" type="date" value={editNextActionDate} onChange={(e) => setEditNextActionDate(e.target.value)} />
                             </div>
 
                             <div className="flex justify-end gap-3 pt-4 border-t">

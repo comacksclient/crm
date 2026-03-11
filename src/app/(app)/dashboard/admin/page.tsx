@@ -17,7 +17,7 @@ export default function AdminDashboard() {
     const { data: session, status } = useSession();
     const [generating, setGenerating] = useState(false);
     const [sheetUrl, setSheetUrl] = useState<string | null>(null);
-    const [profile, setProfile] = useState<{ role: string, teamName: string } | null>(null);
+    const [profile, setProfile] = useState<{ id: string, role: string, teamName: string } | null>(null);
 
     const [uploading, setUploading] = useState(false);
     const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -35,7 +35,7 @@ export default function AdminDashboard() {
         fetch('/api/auth/me')
             .then(r => r.json())
             .then(data => {
-                if (data.user) setProfile({ role: data.user.role, teamName: data.user.teamName });
+                if (data.user) setProfile({ id: data.user.id, role: data.user.role, teamName: data.user.teamName });
             });
     }, []);
 

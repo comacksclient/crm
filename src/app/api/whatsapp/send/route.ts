@@ -42,6 +42,14 @@ export async function POST(req: Request) {
         tempLead.whatsapp_status = 'Sent';
         tempLead.next_action_type = 'Call follow up 1';
         tempLead.next_action_date = tomorrowDate;
+        tempLead.touch_count = (tempLead.touch_count || 0) + 1;
+
+        // Apply Disqualification if touch count reaches the limit (Phase 5 rule)
+        if (tempLead.touch_count >= 5) {
+            tempLead.lead_status = 'Disqualified';
+            tempLead.next_action_type = null;
+            tempLead.next_action_date = null;
+        }
 
         // Recalculate priority routing because the Date changed
         tempLead.priority_score = calculatePriorityScore(tempLead);
@@ -53,8 +61,9 @@ export async function POST(req: Request) {
                 whatsapp_status: 'Sent',
                 whatsapp_details_sent: true,
                 touch_count: { increment: 1 }, // Manager's action counts as a touch
-                next_action_type: 'Call follow up 1',
-                next_action_date: tomorrowDate,
+                lead_status: tempLead.lead_status, 
+                next_action_type: tempLead.next_action_type,
+                next_action_date: tempLead.next_action_date,
                 priority_score: tempLead.priority_score,
                 overdue: tempLead.overdue
             }
@@ -67,7 +76,9 @@ export async function POST(req: Request) {
 
         return NextResponse.json({
             success: true,
-            message: 'WhatsApp dispatched. Lead safely routed to SDR for Tomorrow follow-up.'
+            message: tempLead.lead_status === 'Disqualified' 
+                ? 'WhatsApp dispatched. Lead has been disqualified (Max Touches Reached).'
+                : 'WhatsApp dispatched. Lead safely routed to SDR for Tomorrow follow-up.'
         });
 
     } catch (e: any) {
