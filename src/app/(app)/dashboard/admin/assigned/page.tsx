@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Loader2, Users } from 'lucide-react';
 import { format } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface AssignedLead {
     id: string;
@@ -24,6 +25,7 @@ export default function AssignedLeadsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
     const [deleting, setDeleting] = useState(false);
+    const [selectedSdrFilter, setSelectedSdrFilter] = useState<string>('all');
 
     useEffect(() => {
         fetchData();
@@ -53,12 +55,21 @@ export default function AssignedLeadsPage() {
     };
 
     const selectAll = () => {
-        if (selectedLeads.size === leads.length) {
+        if (selectedLeads.size === filteredLeads.length) {
             setSelectedLeads(new Set()); // Deselect all
         } else {
-            setSelectedLeads(new Set(leads.map(l => l.id))); // Select all
+            setSelectedLeads(new Set(filteredLeads.map(l => l.id))); // Select all explicitly filtered leads
         }
     };
+
+    // Extract unique SDRs for the filter dropdown
+    const uniqueSdrs = Array.from(new Set(leads.map(lead => lead.sdrName))).filter(Boolean).sort();
+
+    // Filter leads based on selected SDR
+    const filteredLeads = leads.filter(lead => {
+        if (selectedSdrFilter === 'all') return true;
+        return lead.sdrName === selectedSdrFilter;
+    });
 
     const handleDelete = async () => {
         if (selectedLeads.size === 0) {
@@ -120,10 +131,27 @@ export default function AssignedLeadsPage() {
                 </div>
 
                 <div className="flex items-center justify-between px-2">
-                    <button onClick={selectAll} className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
-                        {selectedLeads.size === leads.length && leads.length > 0 ? 'Deselect All' : 'Select All'}
-                    </button>
-                    <span className="text-sm text-slate-500 font-medium">Tracking {leads.length} explicitly assigned leads</span>
+                    <div className="flex items-center gap-4">
+                        <button onClick={selectAll} className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
+                            {selectedLeads.size === filteredLeads.length && filteredLeads.length > 0 ? 'Deselect All' : 'Select All'}
+                        </button>
+                        
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Filter:</span>
+                            <Select value={selectedSdrFilter} onValueChange={setSelectedSdrFilter}>
+                                <SelectTrigger className="w-[200px] h-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                                    <SelectValue placeholder="All SDRs" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All SDRs</SelectItem>
+                                    {uniqueSdrs.map(sdr => (
+                                        <SelectItem key={sdr} value={sdr}>{sdr}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <span className="text-sm text-slate-500 font-medium">Tracking {filteredLeads.length} explicitly assigned leads</span>
                 </div>
 
                 {/* Data Table */}
@@ -148,14 +176,14 @@ export default function AssignedLeadsPage() {
                                             Scanning mapping infrastructure...
                                         </td>
                                     </tr>
-                                ) : leads.length === 0 ? (
+                                ) : filteredLeads.length === 0 ? (
                                     <tr>
                                         <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                                            No assigned leads found. Your SDR pipelines are empty.
+                                            No assigned leads found for this filter.
                                         </td>
                                     </tr>
                                 ) : (
-                                    leads.map((lead) => (
+                                    filteredLeads.map((lead) => (
                                         <tr key={lead.id}
                                             onClick={() => toggleLeadSelection(lead.id)}
                                             className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 flex-1 transition-colors cursor-pointer ${selectedLeads.has(lead.id) ? 'bg-indigo-50/40 dark:bg-indigo-900/10' : ''}`}

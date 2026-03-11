@@ -53,8 +53,7 @@ export async function POST(req: Request) {
 
         await prisma.lead.updateMany({
             where: {
-                sdr_id: targetUser.id,
-                lead_status: 'Active'
+                sdr_id: targetUser.id
             },
             data: {
                 sdr_id: null,

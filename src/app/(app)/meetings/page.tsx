@@ -150,7 +150,7 @@ export default function MeetingsPage() {
                                 <tr>
                                     <th className="px-6 py-4 whitespace-nowrap">Date Booked On</th>
                                     <th className="px-6 py-4 whitespace-nowrap">Clinic Name</th>
-                                    <th className="px-6 py-4 whitespace-nowrap">Phone / City</th>
+                                    <th className="px-6 py-4 whitespace-nowrap">Phone Number</th>
                                     <th className="px-6 py-4 whitespace-nowrap">Booked By</th>
                                     <th className="px-6 py-4 text-center whitespace-nowrap">Meeting Date</th>
                                     <th className="px-6 py-4 text-center whitespace-nowrap">Time</th>
@@ -195,7 +195,6 @@ export default function MeetingsPage() {
                                             </td>
                                             <td className="px-6 py-4 text-slate-600 dark:text-slate-400 whitespace-nowrap">
                                                 <div className="font-mono text-xs">{meeting.phone_number}</div>
-                                                <div className="text-xs text-slate-500">{meeting.city}</div>
                                             </td>
                                             <td className="px-6 py-4 text-indigo-600 dark:text-indigo-400 font-medium whitespace-nowrap">
                                                 {meeting.sdr_name || 'System'}

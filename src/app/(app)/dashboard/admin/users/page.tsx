@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Users, ArrowLeft, Save, Plus, Link as LinkIcon, Check, ShieldCheck, UserCircle2 } from 'lucide-react';
+import { Loader2, Users, ArrowLeft, Save, Plus, Link as LinkIcon, Check, ShieldCheck, UserCircle2, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,7 @@ export default function UsersManagementPage() {
     const [teams, setTeams] = useState<Team[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState<string | null>(null);
-    const [profile, setProfile] = useState<{ role: string, teamName: string } | null>(null);
+    const [profile, setProfile] = useState<{ id: string, role: string, teamName: string } | null>(null);
 
     // Team Builder
     const [newTeamName, setNewTeamName] = useState('');
@@ -39,6 +39,7 @@ export default function UsersManagementPage() {
     // Editing state per user ID to allow inline modifications
     const [editingRoles, setEditingRoles] = useState<Record<string, 'ADMIN' | 'MANAGER' | 'SDR'>>({});
     const [editingTeams, setEditingTeams] = useState<Record<string, string>>({});
+    const [deletingUser, setDeletingUser] = useState<string | null>(null);
 
     const [generatingInvite, setGeneratingInvite] = useState<string | null>(null);
     const [copiedInvite, setCopiedInvite] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export default function UsersManagementPage() {
         const res = await fetch('/api/auth/me');
         if (res.ok) {
             const data = await res.json();
-            setProfile({ role: data.user.role, teamName: data.user.teamName });
+            setProfile({ id: data.user.id, role: data.user.role, teamName: data.user.teamName });
         }
     };
 
@@ -150,6 +151,33 @@ export default function UsersManagementPage() {
             toast.error('Network error during save');
         } finally {
             setSubmitting(null);
+        }
+    };
+
+    const handleDeleteUser = async (user: User) => {
+        if (!confirm(`CRITICAL WARNING: Are you sure you want to permanently delete user ${user.name || user.email} and revoke all access? All associated active leads will be unassigned into the float pool.`)) {
+            return;
+        }
+
+        setDeletingUser(user.id);
+        try {
+            const res = await fetch('/api/users/delete', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: user.id })
+            });
+
+            if (res.ok) {
+                toast.success('User permanently purged from the system.');
+                fetchData();
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to delete user');
+            }
+        } catch (e) {
+            toast.error('Network error during user deletion');
+        } finally {
+            setDeletingUser(null);
         }
     };
 
@@ -343,16 +371,28 @@ export default function UsersManagementPage() {
                                                                 </SelectContent>
                                                             </Select>
                                                         </td>
-                                                        <td className="px-6 py-4 text-right">
+                                                        <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => handleSave(user)}
-                                                                disabled={!isDirty || submitting === user.id}
+                                                                disabled={!isDirty || submitting === user.id || deletingUser === user.id}
                                                                 className={`gap-2 ${isDirty ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-400'}`}
                                                             >
                                                                 {submitting === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                                                                 Save
                                                             </Button>
+                                                            {user.id !== profile?.id && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() => handleDeleteUser(user)}
+                                                                    disabled={deletingUser === user.id || submitting === user.id}
+                                                                    className="gap-2 border-rose-200 text-rose-600 hover:bg-rose-50"
+                                                                    title="Permanently Delete System User"
+                                                                >
+                                                                    {deletingUser === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                                </Button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 );

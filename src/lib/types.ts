@@ -50,8 +50,8 @@ export interface Lead {
     // Automated Fields
     next_action_type?: NextActionType | null;
     whatsapp_details_sent?: boolean;
-    next_action_date?: string; // YYYY-MM-DD
-    last_call_date?: string; // YYYY-MM-DD
+    next_action_date?: string | null; // YYYY-MM-DD
+    last_call_date?: string | null; // YYYY-MM-DD
     touch_count: number;
     overdue?: boolean;
     whatsapp_status?: string;
