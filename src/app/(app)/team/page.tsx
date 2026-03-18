@@ -11,7 +11,8 @@ import {
     Loader2,
     PhoneCall,
     AlertCircle,
-    CalendarDays
+    CalendarDays,
+    Eraser
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -102,6 +103,33 @@ export default function MyTeamPage() {
             }
         } catch (e) {
             toast.error('Network error during member removal.');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handlePurgeLeads = async (userId: string, name: string | null) => {
+        if (!confirm(`Are you sure you want to PERMANENTLY delete ALL leads currently assigned to ${name || 'this user'}? This action cannot be undone.`)) {
+            return;
+        }
+
+        setActionLoading(`purge-${userId}`);
+        try {
+            const res = await fetch('/api/leads/purge-by-user', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: userId })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message);
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to purge leads');
+            }
+        } catch (e) {
+            toast.error('Network error during lead purge');
         } finally {
             setActionLoading(null);
         }
@@ -267,13 +295,24 @@ export default function MyTeamPage() {
                                                     </div>
 
                                                     {(data.currentUser?.role === 'MANAGER' || data.currentUser?.role === 'ADMIN') && sdr.id !== data.currentUser?.id && (
-                                                        <button
-                                                            onClick={() => handleRemoveMember(sdr.id, sdr.name)}
-                                                            disabled={actionLoading === sdr.id}
-                                                            className="text-[10px] text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
-                                                        >
-                                                            {actionLoading === sdr.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Remove'}
-                                                        </button>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => handlePurgeLeads(sdr.id, sdr.name)}
+                                                                disabled={actionLoading === `purge-${sdr.id}` || actionLoading === sdr.id}
+                                                                className="text-[10px] text-amber-600 hover:text-amber-700 hover:bg-amber-50 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                                                                title="Purge All Leads for this SDR"
+                                                            >
+                                                                {actionLoading === `purge-${sdr.id}` ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eraser className="h-3 w-3" />}
+                                                                Purge
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleRemoveMember(sdr.id, sdr.name)}
+                                                                disabled={actionLoading === sdr.id || actionLoading === `purge-${sdr.id}`}
+                                                                className="text-[10px] text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded transition-colors flex items-center gap-1 disabled:opacity-50"
+                                                            >
+                                                                {actionLoading === sdr.id ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Remove'}
+                                                            </button>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>

@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { signOut } from 'next-auth/react';
 import { format } from 'date-fns';
-import { Trash2, Edit, Loader2, CheckCircle2, X, LogOut, Search } from 'lucide-react';
+import { Trash2, Edit, Loader2, CheckCircle2, X, LogOut, Search, Square, CheckSquare, Eraser } from 'lucide-react';
 
 export default function QueuePage() {
     const [leads, setLeads] = useState<Lead[]>([]);
@@ -19,6 +19,9 @@ export default function QueuePage() {
     const [userRole, setUserRole] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+    const [selectedSdrFilter, setSelectedSdrFilter] = useState<string>('all');
 
     // Modal & Form State
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
@@ -138,12 +141,98 @@ export default function QueuePage() {
 
             if (res.ok) {
                 toast.success('Lead purged successfully');
+                setSelectedLeads(prev => {
+                    const next = new Set(prev);
+                    next.delete(id);
+                    return next;
+                });
                 fetchLeads();
             } else {
                 toast.error('Failed to delete lead');
             }
         } catch (e) {
             toast.error('Network error during deletion');
+        }
+    };
+
+    const toggleLeadSelection = (id: string) => {
+        setSelectedLeads(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (selectedLeads.size === filteredLeads.length && filteredLeads.length > 0) {
+            setSelectedLeads(new Set());
+        } else {
+            setSelectedLeads(new Set(filteredLeads.map(l => l._rowIndex as string)));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedLeads.size === 0) return;
+        if (!confirm(`Are you sure you want to PERMANENTLY delete ${selectedLeads.size} leads from the system? This action cannot be undone.`)) return;
+
+        setIsBulkDeleting(true);
+        try {
+            const res = await fetch('/api/leads/purge', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leadIds: Array.from(selectedLeads) })
+            });
+
+            if (res.ok) {
+                toast.success(`Successfully purged ${selectedLeads.size} leads.`);
+                setSelectedLeads(new Set());
+                fetchLeads();
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to bulk delete leads');
+            }
+        } catch (e) {
+            toast.error('Network error during bulk deletion');
+        } finally {
+            setIsBulkDeleting(false);
+        }
+    };
+
+    const handlePurgeSdrQueue = async () => {
+        if (selectedSdrFilter === 'all') return;
+        if (!confirm(`Are you sure you want to PERMANENTLY delete ALL leads currently assigned to ${selectedSdrFilter}? This action cannot be undone.`)) {
+            return;
+        }
+
+        setIsBulkDeleting(true);
+        try {
+            // Find the selected SDR ID from the leads list (we need ID for API)
+            const sdrLead = leads.find(l => l.assigned_to === selectedSdrFilter);
+            if (!sdrLead || !sdrLead.sdr_id) {
+                toast.error('Could not identify SDR ID for purging.');
+                return;
+            }
+
+            const res = await fetch('/api/leads/purge-by-user', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: sdrLead.sdr_id })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message || `Successfully purged all leads for ${selectedSdrFilter}`);
+                setSelectedLeads(new Set());
+                fetchLeads();
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to purge leads');
+            }
+        } catch (e) {
+            toast.error('Network error during SDR queue purge');
+        } finally {
+            setIsBulkDeleting(false);
         }
     };
 
@@ -192,16 +281,20 @@ export default function QueuePage() {
 // handleSaveReschedule removed
 
     const filteredLeads = leads.filter(lead => {
-        if (!searchQuery) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-            (lead.clinic_name?.toLowerCase().includes(q)) ||
-            (lead.lead_identity?.toLowerCase().includes(q)) ||
-            (lead.city?.toLowerCase().includes(q)) ||
-            (lead.phone_number?.toLowerCase().includes(q)) ||
-            (lead.assignment_info?.toLowerCase().includes(q))
-        );
+        const qMatches = !searchQuery || [
+            lead.clinic_name,
+            lead.lead_identity,
+            lead.city,
+            lead.phone_number,
+            lead.assignment_info
+        ].some(v => v?.toLowerCase().includes(searchQuery.toLowerCase()));
+
+        const sdrMatches = selectedSdrFilter === 'all' || lead.assigned_to === selectedSdrFilter;
+
+        return qMatches && sdrMatches;
     });
+
+    const uniqueSdrs = Array.from(new Set(leads.map(l => l.assigned_to).filter(Boolean))).sort() as string[];
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 relative">
@@ -221,16 +314,80 @@ export default function QueuePage() {
                         <p className="text-sm text-slate-500">View and log interactions for your assigned leads. Sorted by priority.</p>
                     </div>
 
-                    <div className="w-full md:w-72 relative">
-                        <Input
-                            placeholder="Search clinic, city, or phone..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            className="pl-9 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-                        />
-                        <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+                        {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
+                            <div className="w-full md:w-48">
+                                <Select value={selectedSdrFilter} onValueChange={setSelectedSdrFilter}>
+                                    <SelectTrigger className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800">
+                                        <SelectValue placeholder="Filter by SDR" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All SDR Leads</SelectItem>
+                                        {uniqueSdrs.map(sdr => (
+                                            <SelectItem key={sdr} value={sdr}>{sdr}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        <div className="w-full md:w-72 relative">
+                            <Input
+                                placeholder="Search clinic, city, or phone..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-9 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
+                            />
+                            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                        </div>
                     </div>
                 </div>
+
+                {/* Bulk Actions Toolbar */}
+                {(userRole === 'ADMIN' || userRole === 'MANAGER') && filteredLeads.length > 0 && (
+                    <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleSelectAll}
+                                    className="h-8 text-xs font-medium text-slate-600 dark:text-slate-400 gap-2"
+                                >
+                                    {selectedLeads.size === filteredLeads.length ? (
+                                        <><CheckSquare className="h-4 w-4" /> Deselect All</>
+                                    ) : (
+                                        <><Square className="h-4 w-4" /> Select All</>
+                                    )}
+                                </Button>
+                                <span className="text-xs font-semibold text-slate-500">
+                                    {selectedLeads.size} of {filteredLeads.length} leads selected
+                                </span>
+                            </div>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={handleBulkDelete}
+                                disabled={selectedLeads.size === 0 || isBulkDeleting}
+                                className="h-8 text-xs font-semibold gap-2"
+                            >
+                                {isBulkDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                                Delete Selected
+                            </Button>
+                        </div>
+                        {selectedSdrFilter !== 'all' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handlePurgeSdrQueue}
+                                disabled={isBulkDeleting}
+                                className="h-8 text-xs font-bold gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
+                            >
+                                <Eraser className="h-3 w-3" />
+                                Purge Entire SDR Queue
+                            </Button>
+                        )}
+                    </div>
+                )}
 
                 {/* Data Table */}
                 <Card className="shadow-sm border-slate-200 dark:border-slate-800 overflow-hidden ring-1 ring-slate-200 dark:ring-slate-800">
@@ -238,6 +395,9 @@ export default function QueuePage() {
                         <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
                             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                                 <tr>
+                                    {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
+                                        <th className="px-6 py-4 w-[50px] text-center">Select</th>
+                                    )}
                                     <th className="px-6 py-4 whitespace-nowrap">Name</th>
                                     <th className="px-6 py-4 whitespace-nowrap">City</th>
                                     <th className="px-6 py-4 text-center whitespace-nowrap">Touches</th>
@@ -251,14 +411,14 @@ export default function QueuePage() {
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                                 {loading ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                                        <td colSpan={(userRole === 'ADMIN' || userRole === 'MANAGER') ? 9 : 8} className="px-6 py-12 text-center text-slate-500">
                                             <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                                             Loading leads...
                                         </td>
                                     </tr>
                                 ) : leads.length === 0 ? (
                                     <tr>
-                                        <td colSpan={8} className="px-6 py-12 text-center">
+                                        <td colSpan={(userRole === 'ADMIN' || userRole === 'MANAGER') ? 9 : 8} className="px-6 py-12 text-center">
                                             <div className="flex flex-col items-center gap-3">
                                                 <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full">
                                                     <Loader2 className="h-6 w-6 text-slate-400" />
@@ -283,9 +443,24 @@ export default function QueuePage() {
                                         return (
                                             <tr
                                                 key={idx}
-                                                onClick={() => handleRowClick(lead)}
-                                                className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
+                                                onClick={(e) => {
+                                                    // Only log call if it wasn't a checkbox click
+                                                    if ((e.target as HTMLElement).tagName !== 'INPUT') {
+                                                        handleRowClick(lead);
+                                                    }
+                                                }}
+                                                className={`hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group ${selectedLeads.has(lead._rowIndex as string) ? 'bg-indigo-50/40 dark:bg-indigo-950/30' : ''}`}
                                             >
+                                                {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
+                                                    <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedLeads.has(lead._rowIndex as string)}
+                                                            onChange={() => toggleLeadSelection(lead._rowIndex as string)}
+                                                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                )}
                                                 <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100 max-w-[200px] truncate whitespace-nowrap" title={lead.lead_identity}>
                                                     {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
                                                 </td>

@@ -40,7 +40,7 @@ export async function POST(req: Request) {
                 team_id: targetTeamId,
                 role: 'SDR'
             },
-            select: { id: true }
+            select: { id: true, name: true, email: true }
         });
 
         if (teamSdrs.length === 0) {
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
                             sdr_id: sdr.id,
                             team_id: targetTeamId,
                             manager_id: dbUser.id,
-                            assigned_to: dbUser.name || dbUser.email,
+                            assigned_to: sdr.name || sdr.email,
                             assigned_date: new Date().toISOString()
                         }
                     });

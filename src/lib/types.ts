@@ -40,6 +40,8 @@ export interface Lead {
     // Hierarchy & Assignment
     assigned_to?: string | null;
     assigned_date?: string | null;
+    sdr_id?: string | null;
+    manager_id?: string | null;
 
     // Call Qualification
     call_outcome?: CallOutcome | null;

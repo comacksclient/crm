@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Loader2, Users, ArrowLeft, Save, Plus, Link as LinkIcon, Check, ShieldCheck, UserCircle2, Trash2 } from 'lucide-react';
+import { Loader2, Users, ArrowLeft, Save, Plus, Link as LinkIcon, Check, ShieldCheck, UserCircle2, Trash2, Eraser } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
@@ -40,6 +40,7 @@ export default function UsersManagementPage() {
     const [editingRoles, setEditingRoles] = useState<Record<string, 'ADMIN' | 'MANAGER' | 'SDR'>>({});
     const [editingTeams, setEditingTeams] = useState<Record<string, string>>({});
     const [deletingUser, setDeletingUser] = useState<string | null>(null);
+    const [purgingLeads, setPurgingLeads] = useState<string | null>(null);
 
     const [generatingInvite, setGeneratingInvite] = useState<string | null>(null);
     const [copiedInvite, setCopiedInvite] = useState<string | null>(null);
@@ -178,6 +179,34 @@ export default function UsersManagementPage() {
             toast.error('Network error during user deletion');
         } finally {
             setDeletingUser(null);
+        }
+    };
+
+    const handlePurgeLeads = async (user: User) => {
+        const leadCount = 0; // We don't know the exact count easily here without extra API, but we specify "all"
+        if (!confirm(`Are you sure you want to PERMANENTLY delete ALL leads currently assigned to ${user.name || user.email}? This action cannot be undone.`)) {
+            return;
+        }
+
+        setPurgingLeads(user.id);
+        try {
+            const res = await fetch('/api/leads/purge-by-user', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ targetUserId: user.id })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                toast.success(data.message || `Successfully purged all leads for ${user.name || user.email}`);
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to purge leads');
+            }
+        } catch (e) {
+            toast.error('Network error during lead purge');
+        } finally {
+            setPurgingLeads(null);
         }
     };
 
@@ -375,23 +404,35 @@ export default function UsersManagementPage() {
                                                             <Button
                                                                 size="sm"
                                                                 onClick={() => handleSave(user)}
-                                                                disabled={!isDirty || submitting === user.id || deletingUser === user.id}
+                                                                disabled={!isDirty || submitting === user.id || deletingUser === user.id || purgingLeads === user.id}
                                                                 className={`gap-2 ${isDirty ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-100 text-slate-400'}`}
                                                             >
                                                                 {submitting === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                                                                 Save
                                                             </Button>
                                                             {user.id !== profile?.id && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="outline"
-                                                                    onClick={() => handleDeleteUser(user)}
-                                                                    disabled={deletingUser === user.id || submitting === user.id}
-                                                                    className="gap-2 border-rose-200 text-rose-600 hover:bg-rose-50"
-                                                                    title="Permanently Delete System User"
-                                                                >
-                                                                    {deletingUser === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                                                                </Button>
+                                                                <>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => handlePurgeLeads(user)}
+                                                                        disabled={purgingLeads === user.id || submitting === user.id || deletingUser === user.id}
+                                                                        className="gap-2 border-amber-200 text-amber-600 hover:bg-amber-50"
+                                                                        title="Purge All Leads for this User"
+                                                                    >
+                                                                        {purgingLeads === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eraser className="h-4 w-4" />}
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => handleDeleteUser(user)}
+                                                                        disabled={deletingUser === user.id || submitting === user.id || purgingLeads === user.id}
+                                                                        className="gap-2 border-rose-200 text-rose-600 hover:bg-rose-50"
+                                                                        title="Permanently Delete System User"
+                                                                    >
+                                                                        {deletingUser === user.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                                                                    </Button>
+                                                                </>
                                                             )}
                                                         </td>
                                                     </tr>

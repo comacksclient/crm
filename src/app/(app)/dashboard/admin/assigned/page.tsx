@@ -135,7 +135,7 @@ export default function AssignedLeadsPage() {
                         <button onClick={selectAll} className="text-sm text-indigo-600 dark:text-indigo-400 font-medium hover:underline">
                             {selectedLeads.size === filteredLeads.length && filteredLeads.length > 0 ? 'Deselect All' : 'Select All'}
                         </button>
-                        
+
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Filter:</span>
                             <Select value={selectedSdrFilter} onValueChange={setSelectedSdrFilter}>

@@ -16,6 +16,8 @@ export const mapPrismaToLead = (dbLead: any): Lead => ({
     // Hierarchy Data
     assigned_to: dbLead.assigned_to,
     assigned_date: dbLead.assigned_date,
+    sdr_id: dbLead.sdr_id,
+    manager_id: dbLead.manager_id,
 
     call_outcome: dbLead.call_outcome as any,
     doctor_type: dbLead.doctor_type as any,

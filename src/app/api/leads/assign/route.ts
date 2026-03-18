@@ -55,6 +55,16 @@ export async function POST(req: Request) {
             }
         }
 
+        // Fetch target SDR info for record keeping
+        const targetSdr = await prisma.user.findUnique({
+            where: { id: sdrId },
+            select: { name: true, email: true }
+        });
+
+        if (!targetSdr) {
+            return NextResponse.json({ error: 'Target SDR not found.' }, { status: 404 });
+        }
+
         // Update all Leads to belong to this SDR, and also record who the allocating Manager was.
         const updateResult = await prisma.lead.updateMany({
             where: {
@@ -63,7 +73,7 @@ export async function POST(req: Request) {
             data: {
                 sdr_id: sdrId,
                 manager_id: dbUser.id,
-                assigned_to: dbUser.name || dbUser.email,
+                assigned_to: targetSdr.name || targetSdr.email,
                 assigned_date: new Date().toISOString()
             }
         });
