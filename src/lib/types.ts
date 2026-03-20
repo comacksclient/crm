@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'manager' | 'sdr';
+export type UserRole = 'admin' | 'manager' | 'sdr' | 'hr';
 
 export type LeadStatus = 'Active' | 'Meeting Booked' | 'Disqualified' | 'Inactive';
 
@@ -80,5 +80,20 @@ export interface CallLogPayload {
     whatsappDetailsSent?: boolean;
     meetingDate?: string;
     meetingTime?: string;
-    providedNextActionDate?: string; // For manual "Call follow up" override
+    providedNextActionDate?: string; // For manual "Call follow up" override override
+}
+
+export interface Candidate {
+    id: string;
+    name: string;
+    phone_number: string;
+    email?: string | null;
+    interview_taken: boolean;
+    status: string;
+    notes?: string | null;
+    hired_timing?: string | null;
+    scheduled_date?: string | null;
+    scheduled_time?: string | null;
+    createdAt: string;
+    updatedAt: string;
 }

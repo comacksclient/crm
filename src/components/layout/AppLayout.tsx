@@ -56,6 +56,11 @@ export default function AppLayout({ children, user }: AppLayoutProps) {
             menu.unshift({ name: 'System Overview', href: '/dashboard/overview', icon: BarChart3 });
         }
 
+        // HR Specific / Shared HR access
+        if (user.role === 'ADMIN' || user.role === 'HR') {
+            menu.push({ name: 'HR Management', href: '/dashboard/hr', icon: Briefcase });
+        }
+
         return menu;
     };
 

@@ -41,30 +41,27 @@ export const mapPrismaToLead = (dbLead: any): Lead => ({
 // getCallQueue removed: Legacy Google Sheets function phased out for direct scalable Prisma calls.
 // In the new system, rowIndex is actually the UUID string of the lead
 export async function updateLeadRow(rowIndex: string, lead: Lead) {
-    try {
-        await prisma.lead.update({
-            where: { id: rowIndex },
-            data: {
-                call_outcome: lead.call_outcome,
-                doctor_type: lead.doctor_type,
-                interest_level: lead.interest_level,
-                call_notes: lead.call_notes,
-                next_action_type: lead.next_action_type,
-                whatsapp_details_sent: lead.whatsapp_details_sent,
-                next_action_date: lead.next_action_date,
-                last_call_date: lead.last_call_date,
-                touch_count: lead.touch_count,
-                lead_status: lead.lead_status,
-                priority_score: lead.priority_score,
-                overdue: lead.overdue || false,
-                meeting_status: lead.meeting_status || false,
-                meeting_date: lead.meeting_date || null,
-                meeting_time: lead.meeting_time || null
-            }
-        });
-    } catch (e) {
-        console.error("Failed to update Lead in Postgres:", e);
-    }
+    // We throw the error so the API can report failure to the user/SDR
+    await prisma.lead.update({
+        where: { id: rowIndex },
+        data: {
+            call_outcome: lead.call_outcome,
+            doctor_type: lead.doctor_type,
+            interest_level: lead.interest_level,
+            call_notes: lead.call_notes,
+            next_action_type: lead.next_action_type,
+            whatsapp_details_sent: lead.whatsapp_details_sent,
+            next_action_date: lead.next_action_date,
+            last_call_date: lead.last_call_date,
+            touch_count: lead.touch_count,
+            lead_status: lead.lead_status,
+            priority_score: lead.priority_score,
+            overdue: lead.overdue || false,
+            meeting_status: lead.meeting_status || false,
+            meeting_date: lead.meeting_date || null,
+            meeting_time: lead.meeting_time || null
+        }
+    });
 }
 
 // Hard Delete Lead from DB

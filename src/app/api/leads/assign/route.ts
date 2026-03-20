@@ -58,7 +58,7 @@ export async function POST(req: Request) {
         // Fetch target SDR info for record keeping
         const targetSdr = await prisma.user.findUnique({
             where: { id: sdrId },
-            select: { name: true, email: true }
+            select: { name: true, email: true, team_id: true }
         });
 
         if (!targetSdr) {
@@ -72,6 +72,7 @@ export async function POST(req: Request) {
             },
             data: {
                 sdr_id: sdrId,
+                team_id: targetSdr.team_id,
                 manager_id: dbUser.id,
                 assigned_to: targetSdr.name || targetSdr.email,
                 assigned_date: new Date().toISOString()

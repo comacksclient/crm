@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import prisma from '@/lib/prisma';
+import { format } from 'date-fns';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
     try {
@@ -25,7 +28,7 @@ export async function GET() {
             leadScope.team_id = dbUser.team_id;
         }
 
-        const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const todayStr = format(new Date(), 'yyyy-MM-dd'); // Synchronized with actionEngine
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
 
@@ -53,7 +56,7 @@ export async function GET() {
         // === 4. SDR Leaderboard ===
         // Get all SDRs in scope
         const sdrWhere: any = { role: 'SDR' };
-        if (dbUser.role === 'MANAGER' && dbUser.team_id) {
+        if (dbUser.team_id) {
             sdrWhere.team_id = dbUser.team_id;
         }
         const sdrs = await prisma.user.findMany({
@@ -62,14 +65,14 @@ export async function GET() {
         });
 
         // For each SDR: count assigned leads, calls today, meetings booked
-        const sdrLeaderboard = await Promise.all(sdrs.map(async (sdr) => {
-            const [assignedLeads, callsTodaySdr, meetingsBooked] = await Promise.all([
-                prisma.lead.count({ where: { sdr_id: sdr.id, lead_status: 'Active' } }),
-                prisma.lead.count({ where: { sdr_id: sdr.id, last_call_date: todayStr } }),
-                prisma.meeting.count({ where: { booked_by: sdr.email } }),
-            ]);
+        const sdrLeaderboard = [];
+        for (const sdr of sdrs) {
+            // We do these sequentially to avoid exhausting the DB connection pool (Aiven limits)
+            const assignedLeads = await prisma.lead.count({ where: { sdr_id: sdr.id, lead_status: 'Active' } });
+            const callsTodaySdr = await prisma.lead.count({ where: { sdr_id: sdr.id, last_call_date: todayStr } });
+            const meetingsBooked = await prisma.meeting.count({ where: { booked_by: sdr.email } });
 
-            return {
+            sdrLeaderboard.push({
                 id: sdr.id,
                 name: sdr.name || sdr.email.split('@')[0],
                 email: sdr.email,
@@ -77,8 +80,8 @@ export async function GET() {
                 callsToday: callsTodaySdr,
                 meetingsBooked,
                 conversionRate: assignedLeads > 0 ? ((meetingsBooked / (assignedLeads + meetingsBooked)) * 100).toFixed(1) : '0.0'
-            };
-        }));
+            });
+        }
 
         // Sort leaderboard by meetings booked DESC
         sdrLeaderboard.sort((a, b) => b.meetingsBooked - a.meetingsBooked);

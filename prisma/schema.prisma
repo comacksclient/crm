@@ -16,7 +16,7 @@ model User {
   name      String?
   image     String?
   role      Role     @default(SDR)
-  team_id   String? // The explicit corporate team this user was assigned to
+  team_id   String?
   team      Team?    @relation(fields: [team_id], references: [id])
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -24,10 +24,10 @@ model User {
 
 model Team {
   id        String       @id @default(uuid())
-  name      String       @unique // e.g. "Alpha Squad"
-  users     User[] // Members in this team
-  leads     Lead[] // Loads delegated to this team
-  invites   TeamInvite[] // Outstanding invite links for this team
+  name      String       @unique
+  users     User[]
+  leads     Lead[]
+  invites   TeamInvite[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 }
@@ -36,7 +36,7 @@ model TeamInvite {
   id        String   @id @default(uuid())
   team_id   String
   team      Team     @relation(fields: [team_id], references: [id], onDelete: Cascade)
-  createdBy String // ID of the Manager/Admin who generated this link
+  createdBy String
   expiresAt DateTime
   createdAt DateTime @default(now())
 }
@@ -45,6 +45,7 @@ enum Role {
   ADMIN
   MANAGER
   SDR
+  HR
 }
 
 model SystemConfig {
@@ -55,47 +56,41 @@ model SystemConfig {
 
 model Lead {
   id              String @id @default(uuid())
-  lead_identity   String // Clinic - Location - Phone
-  assignment_info String // City/Manager assignment
+  lead_identity   String
+  assignment_info String
 
-  // Explicit Lead Identity
   lead_code    String?
   clinic_name  String?
   phone_number String?
   city         String?
 
-  lead_type String? // New / Hot / Nurture / Cold
+  lead_type String?
 
-  // Call Qualification
   call_outcome   String?
   doctor_type    String?
   interest_level Int?
   call_notes     String?
 
-  // Automated Follow-Ups
   next_action_type      String? @default("New")
   whatsapp_details_sent Boolean @default(false)
-  whatsapp_status       String  @default("Pending") // Pending, Sent
-  next_action_date      String? // Formatted YYYY-MM-DD
+  whatsapp_status       String  @default("Pending")
+  next_action_date      String?
   last_call_date        String?
   touch_count           Int     @default(0)
 
-  // State Management
-  lead_status    String  @default("Active") // Active, Meeting Booked, Disqualified
+  lead_status    String  @default("Active")
   priority_score Int     @default(0)
   overdue        Boolean @default(false)
 
-  // Meeting Booking Fields
   meeting_status Boolean @default(false)
   meeting_date   String?
   meeting_time   String?
 
-  // Relations
-  team_id       String? // The high-level Team (e.g. "Alpha Squad") assigned to work these leads
+  team_id       String?
   team          Team?     @relation(fields: [team_id], references: [id])
-  manager_id    String? // Manager who actively checked up on or routed this lead
-  sdr_id        String? // The explicitly assigned caller who must execute the call
-  assigned_to   String? // Text definition of assignment
+  manager_id    String?
+  sdr_id        String?
+  assigned_to   String?
   assigned_date String?
   meetings      Meeting[]
 
@@ -108,20 +103,34 @@ model Meeting {
   lead_id String
   lead    Lead   @relation(fields: [lead_id], references: [id], onDelete: Cascade)
 
-  // Lead Snapshot
   clinic_name  String?
   phone_number String?
 
   meeting_date   String
   meeting_time   String
-  meeting_status String  @default("Scheduled") // Scheduled, Completed, No Show, Rescheduled, Cancelled
-  booked_by      String // SDR name/email who booked it
+  meeting_status String  @default("Scheduled")
+  booked_by      String
   meeting_notes  String?
   no_show        Boolean @default(false)
 
-  // Reschedule Tracking
   rescheduled_from String?
   rescheduled_to   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Candidate {
+  id              String  @id @default(uuid())
+  name            String
+  phone_number    String  @unique
+  email           String?
+  interview_taken Boolean @default(false)
+  status          String  @default("Applied")
+  notes           String?
+  hired_timing    String?
+  scheduled_date  String?
+  scheduled_time  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
