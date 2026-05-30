@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import prisma from '@/lib/prisma';
-import { updateLeadRow, mapPrismaToLead } from '@/lib/googleSheets';
+import { updateLeadRow, mapPrismaToLead } from '@/lib/leadService';
 import { calculatePriorityScore } from '@/lib/actionEngine';
 import { addDays, format } from 'date-fns';
 

@@ -1,29 +1,46 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Lead, CallOutcome, DoctorType, InterestLevel } from '@/lib/types';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { signOut } from 'next-auth/react';
 import { format } from 'date-fns';
-import { Trash2, Edit, Loader2, CheckCircle2, X, LogOut, Search, Square, CheckSquare, Eraser } from 'lucide-react';
+import { 
+  Trash2, Edit, Loader2, CheckCircle2, X, Search, 
+  ChevronLeft, ChevronRight, Filter, Play, ClipboardList, 
+  History, Calendar, MessageSquare, PhoneCall, Clock, CheckCircle
+} from 'lucide-react';
 
 export default function QueuePage() {
     const [leads, setLeads] = useState<Lead[]>([]);
     const [teamName, setTeamName] = useState<string | null>(null);
     const [userRole, setUserRole] = useState<string | null>(null);
+    const [userEmail, setUserEmail] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [selectedLeads, setSelectedLeads] = useState<Set<string>>(new Set());
-    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-    const [selectedSdrFilter, setSelectedSdrFilter] = useState<string>('all');
+    const [cityFilter, setCityFilter] = useState('all');
+    const [sdrFilter, setSdrFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('Active');
+    const [actionFilter, setActionFilter] = useState('all');
+    const [scheduleFilter, setScheduleFilter] = useState('all');
+    const [uniqueCities, setUniqueCities] = useState<string[]>([]);
+    const [uniqueSdrs, setUniqueSdrs] = useState<string[]>([]);
 
-    // Modal & Form State
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalLeads, setTotalLeads] = useState(0);
+
+    // Layout States
+    const [focusMode, setFocusMode] = useState(false);
+    const [activeTab, setActiveTab] = useState<'due' | 'future' | 'whatsapp'>('due');
+
+    // Drawer / Form State
     const [activeLead, setActiveLead] = useState<Lead | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
@@ -35,60 +52,142 @@ export default function QueuePage() {
     const [meetingTime, setMeetingTime] = useState('');
     const [whatsappSent, setWhatsappSent] = useState(false);
 
-    // Edit Modal State
-    const [editingLead, setEditingLead] = useState<Lead | null>(null);
-    const [editClinicName, setEditClinicName] = useState('');
-    const [editCity, setEditCity] = useState('');
-    const [editPhone, setEditPhone] = useState('');
-    const [editNextActionDate, setEditNextActionDate] = useState('');
-    const [savingEdit, setSavingEdit] = useState(false);
-
+    // Heartbeat setup for live active monitoring
     useEffect(() => {
-        fetchLeads();
+        const sendHeartbeat = async () => {
+            try {
+                await fetch('/api/users/ping', { method: 'POST' });
+            } catch (err) {
+                console.error("Heartbeat error:", err);
+            }
+        };
+
+        sendHeartbeat(); // Ping immediately
+        const heartbeatInterval = setInterval(sendHeartbeat, 2 * 60 * 1000); // 2 minutes
+
+        return () => clearInterval(heartbeatInterval);
     }, []);
 
-    const fetchLeads = async () => {
+    // Load Leads list with parameters
+    const fetchLeads = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch('/api/leads/list');
+            // Map tabs to action filters or overdue filters
+            let overdueParam = 'all';
+            let nextActionParam = actionFilter;
+            
+            if (userRole === 'SDR') {
+                if (activeTab === 'due') {
+                    overdueParam = 'all';
+                } else if (activeTab === 'future') {
+                    overdueParam = 'false';
+                }
+            } else {
+                if (activeTab === 'due') {
+                    overdueParam = 'true';
+                } else if (activeTab === 'future') {
+                    overdueParam = 'false';
+                }
+            }
+
+            if (activeTab === 'whatsapp') {
+                nextActionParam = 'WhatsApp Follow Up';
+            }
+
+            const queryParams = new URLSearchParams({
+                page: page.toString(),
+                limit: '15',
+                search: searchQuery,
+                city: cityFilter,
+                sdrId: sdrFilter,
+                status: statusFilter,
+                nextAction: nextActionParam,
+                overdue: overdueParam,
+                schedule: scheduleFilter
+            });
+
+            const res = await fetch(`/api/leads/list?${queryParams.toString()}`);
             if (res.ok) {
                 const data = await res.json();
                 setLeads(data.leads || []);
+                setTotalPages(data.totalPages || 1);
+                setTotalLeads(data.total || 0);
                 setTeamName(data.teamName || 'Unassigned');
+
+                // Extract cities & SDRs for advanced filtering drop downs
+                if (data.leads && data.leads.length > 0) {
+                    const cities = Array.from(new Set(data.leads.map((l: Lead) => l.city).filter(Boolean))) as string[];
+                    const sdrs = Array.from(new Set(data.leads.map((l: Lead) => l.assigned_to).filter(Boolean))) as string[];
+                    setUniqueCities(prev => Array.from(new Set([...prev, ...cities])).sort());
+                    setUniqueSdrs(prev => Array.from(new Set([...prev, ...sdrs])).sort());
+                }
             }
 
             const userRes = await fetch('/api/auth/me');
             if (userRes.ok) {
                 const userData = await userRes.json();
                 setUserRole(userData.user?.role || 'SDR');
+                setUserEmail(userData.user?.email || null);
             }
         } catch (e) {
-            toast.error('Network error while fetching leads');
+            toast.error('Network error fetching leads pipeline');
         } finally {
             setLoading(false);
         }
+    }, [page, searchQuery, cityFilter, sdrFilter, statusFilter, actionFilter, activeTab, userRole, scheduleFilter]);
+
+    useEffect(() => {
+        fetchLeads();
+    }, [fetchLeads]);
+
+    // Handle single lead clicks (claim lock and open workspace)
+    const handleStartCall = async (lead: Lead) => {
+        try {
+            // Attempt to lock lead to prevent double dialing
+            const res = await fetch('/api/leads/lock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leadId: lead._rowIndex, action: 'lock' })
+            });
+
+            if (res.ok) {
+                setActiveLead(lead);
+                setOutcome(lead.call_outcome || '');
+                setDoctorType(lead.doctor_type || '');
+                setInterestLevel(lead.interest_level || '');
+                setNotes('');
+                setMeetingDate(lead.meeting_date || '');
+                setMeetingTime(lead.meeting_time || '');
+                setWhatsappSent(lead.whatsapp_details_sent || false);
+                toast.success(`Lead locked. Session started.`);
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to lock lead.');
+            }
+        } catch (err) {
+            toast.error('Error starting call lock.');
+        }
     };
 
-    const handleRowClick = (lead: Lead) => {
-        setActiveLead(lead);
-        setOutcome(lead.call_outcome || '');
-        setDoctorType(lead.doctor_type || '');
-        setInterestLevel(lead.interest_level || '');
-        setNotes(lead.call_notes || '');
-        setMeetingDate(lead.meeting_date || '');
-        setMeetingTime(lead.meeting_time || '');
-        setWhatsappSent(lead.whatsapp_details_sent || false);
-    };
-
-    const handleCloseModal = () => {
-        setActiveLead(null);
+    const handleReleaseCall = async () => {
+        if (!activeLead) return;
+        try {
+            await fetch('/api/leads/lock', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ leadId: activeLead._rowIndex, action: 'unlock' })
+            });
+            setActiveLead(null);
+        } catch (err) {
+            console.error(err);
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!activeLead || !outcome) return;
         if (!notes.trim()) {
-            toast.error("Call Notes are mandatory to advance the workflow!");
+            toast.error("Call Notes are mandatory to log call outcome!");
             return;
         }
 
@@ -108,592 +207,517 @@ export default function QueuePage() {
 
             const res = await fetch('/api/queue/log-call', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
             if (res.ok) {
-                toast.success('Call logged successfully!');
+                toast.success('Call logged and next action scheduled!');
                 setActiveLead(null);
-                fetchLeads(); // Refresh table
+                fetchLeads(); // Refresh list
             } else {
                 const data = await res.json();
-                toast.error(data.error || 'Failed to log call');
+                toast.error(data.error || 'Failed to log call outcome');
             }
         } catch (e) {
-            toast.error('Error submitting call log');
+            toast.error('Error logging call details.');
         } finally {
             setSubmitting(false);
         }
     };
 
-    const handleDeleteLead = async (id: string, name: string) => {
-        if (!confirm(`Are you sure you want to PERMANENTLY delete ${name} from the system? This action cannot be undone.`)) return;
-
-        try {
-            const res = await fetch('/api/leads/purge', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ leadIds: [id] })
-            });
-
-            if (res.ok) {
-                toast.success('Lead purged successfully');
-                setSelectedLeads(prev => {
-                    const next = new Set(prev);
-                    next.delete(id);
-                    return next;
-                });
-                fetchLeads();
-            } else {
-                toast.error('Failed to delete lead');
-            }
-        } catch (e) {
-            toast.error('Network error during deletion');
-        }
+    const resetFilters = () => {
+        setSearchQuery('');
+        setCityFilter('all');
+        setSdrFilter('all');
+        setActionFilter('all');
+        setScheduleFilter('all');
+        setStatusFilter('Active');
+        setPage(1);
     };
-
-    const toggleLeadSelection = (id: string) => {
-        setSelectedLeads(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    };
-
-    const handleSelectAll = () => {
-        if (selectedLeads.size === filteredLeads.length && filteredLeads.length > 0) {
-            setSelectedLeads(new Set());
-        } else {
-            setSelectedLeads(new Set(filteredLeads.map(l => l._rowIndex as string)));
-        }
-    };
-
-    const handleBulkDelete = async () => {
-        if (selectedLeads.size === 0) return;
-        if (!confirm(`Are you sure you want to PERMANENTLY delete ${selectedLeads.size} leads from the system? This action cannot be undone.`)) return;
-
-        setIsBulkDeleting(true);
-        try {
-            const res = await fetch('/api/leads/purge', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ leadIds: Array.from(selectedLeads) })
-            });
-
-            if (res.ok) {
-                toast.success(`Successfully purged ${selectedLeads.size} leads.`);
-                setSelectedLeads(new Set());
-                fetchLeads();
-            } else {
-                const data = await res.json();
-                toast.error(data.error || 'Failed to bulk delete leads');
-            }
-        } catch (e) {
-            toast.error('Network error during bulk deletion');
-        } finally {
-            setIsBulkDeleting(false);
-        }
-    };
-
-    const handlePurgeSdrQueue = async () => {
-        if (selectedSdrFilter === 'all') return;
-        if (!confirm(`Are you sure you want to PERMANENTLY delete ALL leads currently assigned to ${selectedSdrFilter}? This action cannot be undone.`)) {
-            return;
-        }
-
-        setIsBulkDeleting(true);
-        try {
-            // Find the selected SDR ID from the leads list (we need ID for API)
-            const sdrLead = leads.find(l => l.assigned_to === selectedSdrFilter);
-            if (!sdrLead || !sdrLead.sdr_id) {
-                toast.error('Could not identify SDR ID for purging.');
-                return;
-            }
-
-            const res = await fetch('/api/leads/purge-by-user', {
-                method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetUserId: sdrLead.sdr_id })
-            });
-
-            if (res.ok) {
-                const data = await res.json();
-                toast.success(data.message || `Successfully purged all leads for ${selectedSdrFilter}`);
-                setSelectedLeads(new Set());
-                fetchLeads();
-            } else {
-                const data = await res.json();
-                toast.error(data.error || 'Failed to purge leads');
-            }
-        } catch (e) {
-            toast.error('Network error during SDR queue purge');
-        } finally {
-            setIsBulkDeleting(false);
-        }
-    };
-
-    const handleOpenEdit = (lead: Lead) => {
-        setEditingLead(lead);
-        setEditClinicName(lead.clinic_name || lead.lead_identity.split(' - ')[0] || '');
-        setEditCity(lead.city || lead.assignment_info?.split(' - ')[0] || '');
-        setEditPhone(lead.phone_number || lead.lead_identity.split(' - ')[1] || '');
-        setEditNextActionDate(lead.next_action_date || '');
-    };
-
-    const handleSaveEdit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingLead) return;
-
-        setSavingEdit(true);
-        try {
-            const res = await fetch('/api/leads/edit', {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    leadId: editingLead._rowIndex,
-                    clinic_name: editClinicName,
-                    city: editCity,
-                    phone_number: editPhone,
-                    lead_identity: `${editClinicName} - ${editPhone}`,
-                    next_action_date: editNextActionDate || null
-                })
-            });
-
-            if (res.ok) {
-                toast.success('Lead corrected successfully');
-                setEditingLead(null);
-                fetchLeads();
-            } else {
-                const data = await res.json();
-                toast.error(data.error || 'Failed to update lead');
-            }
-        } catch (e) {
-            toast.error('Error saving lead corrections');
-        } finally {
-            setSavingEdit(false);
-        }
-    };
-
-// handleSaveReschedule removed
-
-    const filteredLeads = leads.filter(lead => {
-        const qMatches = !searchQuery || [
-            lead.clinic_name,
-            lead.lead_identity,
-            lead.city,
-            lead.phone_number,
-            lead.assignment_info
-        ].some(v => v?.toLowerCase().includes(searchQuery.toLowerCase()));
-
-        const sdrMatches = selectedSdrFilter === 'all' || lead.assigned_to === selectedSdrFilter;
-
-        return qMatches && sdrMatches;
-    });
-
-    const uniqueSdrs = Array.from(new Set(leads.map(l => l.assigned_to).filter(Boolean))).sort() as string[];
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 relative">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 relative font-sans">
             <div className="max-w-7xl mx-auto space-y-6">
 
-                {/* Header */}
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800">
+                {/* Dashboard Header Banner */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            Crm Dashboard
+                        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
+                            📞 Outbound Calling Workspace
                             {teamName && (
-                                <span className="text-xs font-normal px-2 py-0.5 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full border border-indigo-200 dark:border-indigo-800">
+                                <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 rounded-full border border-indigo-150">
                                     {teamName}
                                 </span>
                             )}
                         </h1>
-                        <p className="text-sm text-slate-500">View and log interactions for your assigned leads. Sorted by priority.</p>
+                        <p className="text-sm text-slate-500 mt-1">Review, filter, and dial corporate leads. Sorted dynamically by priority.</p>
                     </div>
 
-                    <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
-                        {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
-                            <div className="w-full md:w-48">
-                                <Select value={selectedSdrFilter} onValueChange={setSelectedSdrFilter}>
-                                    <SelectTrigger className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800">
-                                        <SelectValue placeholder="Filter by SDR" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All SDR Leads</SelectItem>
-                                        {uniqueSdrs.map(sdr => (
-                                            <SelectItem key={sdr} value={sdr}>{sdr}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        )}
-                        <div className="w-full md:w-72 relative">
-                            <Input
-                                placeholder="Search clinic, city, or phone..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9 bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800"
-                            />
-                            <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                    <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                        {/* Focus Mode Pill Toggle */}
+                        <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-full border border-slate-200 dark:border-slate-700">
+                            <span className="text-xs font-semibold text-slate-600 dark:text-slate-350 px-2">Focus View</span>
+                            <button
+                                onClick={() => setFocusMode(!focusMode)}
+                                className={`px-4 py-1 text-xs font-bold rounded-full transition-all duration-200 ${focusMode ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-400'}`}
+                            >
+                                {focusMode ? 'ON' : 'OFF'}
+                            </button>
                         </div>
+
+                        {/* Reset button */}
+                        <Button variant="outline" size="sm" onClick={resetFilters} className="text-xs font-medium">
+                            Reset View
+                        </Button>
                     </div>
                 </div>
 
-                {/* Bulk Actions Toolbar */}
-                {(userRole === 'ADMIN' || userRole === 'MANAGER') && filteredLeads.length > 0 && (
-                    <div className="flex items-center justify-between bg-white dark:bg-slate-900 px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-4">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleSelectAll}
-                                    className="h-8 text-xs font-medium text-slate-600 dark:text-slate-400 gap-2"
-                                >
-                                    {selectedLeads.size === filteredLeads.length ? (
-                                        <><CheckSquare className="h-4 w-4" /> Deselect All</>
-                                    ) : (
-                                        <><Square className="h-4 w-4" /> Select All</>
-                                    )}
-                                </Button>
-                                <span className="text-xs font-semibold text-slate-500">
-                                    {selectedLeads.size} of {filteredLeads.length} leads selected
-                                </span>
+                {/* Advanced Search & Filtering Drawer */}
+                {!activeLead && (
+                    <Card className="shadow-sm border-slate-200 dark:border-slate-800">
+                        <CardContent className="p-5 flex flex-wrap gap-4 items-center">
+                            <div className="flex-1 min-w-[240px] relative">
+                                <Search className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
+                                <Input
+                                    placeholder="Search clinic, phone number, city..."
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                                    className="pl-9 bg-slate-50 border-slate-250 rounded-xl"
+                                />
                             </div>
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={handleBulkDelete}
-                                disabled={selectedLeads.size === 0 || isBulkDeleting}
-                                className="h-8 text-xs font-semibold gap-2"
-                            >
-                                {isBulkDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
-                                Delete Selected
-                            </Button>
-                        </div>
-                        {selectedSdrFilter !== 'all' && (
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handlePurgeSdrQueue}
-                                disabled={isBulkDeleting}
-                                className="h-8 text-xs font-bold gap-2 border-amber-200 text-amber-700 hover:bg-amber-50"
-                            >
-                                <Eraser className="h-3 w-3" />
-                                Purge Entire SDR Queue
-                            </Button>
-                        )}
-                    </div>
-                )}
 
-                {/* Data Table */}
-                <Card className="shadow-sm border-slate-200 dark:border-slate-800 overflow-hidden ring-1 ring-slate-200 dark:ring-slate-800">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
-                            <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
-                                <tr>
-                                    {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
-                                        <th className="px-6 py-4 w-[50px] text-center">Select</th>
-                                    )}
-                                    <th className="px-6 py-4 whitespace-nowrap">Name</th>
-                                    <th className="px-6 py-4 whitespace-nowrap">City</th>
-                                    <th className="px-6 py-4 text-center whitespace-nowrap">Touches</th>
-                                    <th className="px-6 py-4 text-center whitespace-nowrap">Next Action Type</th>
-                                    <th className="px-6 py-4 text-center whitespace-nowrap">Status</th>
-                                    <th className="px-6 py-4 whitespace-nowrap">Next Action Date</th>
-                                    <th className="px-6 py-4 text-center whitespace-nowrap">Overdue</th>
-                                    <th className="px-6 py-4 text-right whitespace-nowrap">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                                {loading ? (
-                                    <tr>
-                                        <td colSpan={(userRole === 'ADMIN' || userRole === 'MANAGER') ? 9 : 8} className="px-6 py-12 text-center text-slate-500">
-                                            <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                                            Loading leads...
-                                        </td>
-                                    </tr>
-                                ) : leads.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={(userRole === 'ADMIN' || userRole === 'MANAGER') ? 9 : 8} className="px-6 py-12 text-center">
-                                            <div className="flex flex-col items-center gap-3">
-                                                <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full">
-                                                    <Loader2 className="h-6 w-6 text-slate-400" />
-                                                </div>
-                                                <div>
-                                                    <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">No leads found</p>
-                                                    <p className="text-sm text-slate-500 max-w-md mx-auto">
-                                                        {searchQuery ? "Your search didn't match any leads in the current queue." : (
-                                                            <>
-                                                                You are currently in the <b>{teamName}</b> team.
-                                                                Wait for your Manager to assign leads to your queue or ask them to use the "Turbo Distribute" tool.
-                                                            </>
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredLeads.map((lead, idx) => {
-                                        const isOverdue = lead.next_action_date && new Date(lead.next_action_date) < new Date(new Date().setHours(0, 0, 0, 0));
-                                        return (
-                                            <tr
-                                                key={idx}
-                                                onClick={(e) => {
-                                                    // Only log call if it wasn't a checkbox click
-                                                    if ((e.target as HTMLElement).tagName !== 'INPUT') {
-                                                        handleRowClick(lead);
-                                                    }
-                                                }}
-                                                className={`hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group ${selectedLeads.has(lead._rowIndex as string) ? 'bg-indigo-50/40 dark:bg-indigo-950/30' : ''}`}
-                                            >
-                                                {(userRole === 'ADMIN' || userRole === 'MANAGER') && (
-                                                    <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={selectedLeads.has(lead._rowIndex as string)}
-                                                            onChange={() => toggleLeadSelection(lead._rowIndex as string)}
-                                                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 cursor-pointer"
-                                                        />
-                                                    </td>
-                                                )}
-                                                <td className="px-6 py-4 font-medium text-slate-900 dark:text-slate-100 max-w-[200px] truncate whitespace-nowrap" title={lead.lead_identity}>
-                                                    {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
-                                                </td>
-                                                <td className="px-6 py-4 text-slate-600 dark:text-slate-400 max-w-[150px] truncate whitespace-nowrap" title={lead.city || lead.assignment_info}>
-                                                    {lead.city || lead.assignment_info?.split(' - ')[0] || '-'}
-                                                </td>
-                                                <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                                                    {lead.touch_count} / 5
-                                                </td>
-                                                <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                    <span className="text-xs font-semibold px-2 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-md whitespace-nowrap">
-                                                        {lead.next_action_type || 'New'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                    <span className="px-2 py-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-md text-xs font-medium border border-green-200 dark:border-green-800 whitespace-nowrap">
-                                                        {lead.lead_status}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className={isOverdue ? "text-red-600 font-semibold whitespace-nowrap" : "text-slate-600 whitespace-nowrap"}>
-                                                        {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                    {isOverdue ? (
-                                                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs uppercase font-bold rounded-full border border-red-200">Overdue</span>
-                                                    ) : (
-                                                        <span className="px-2 py-1 bg-slate-100 text-slate-500 text-xs font-medium rounded-full border border-slate-200">On Track</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4 text-right whitespace-nowrap">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        {userRole === 'ADMIN' && (
-                                                            <>
-                                                                <Button
-                                                                    onClick={(e) => { e.stopPropagation(); handleOpenEdit(lead); }}
-                                                                    size="icon" variant="ghost" className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50"
-                                                                >
-                                                                    <Edit className="h-4 w-4" />
-                                                                </Button>
-                                                                <Button
-                                                                    onClick={(e) => { e.stopPropagation(); handleDeleteLead(lead._rowIndex as string, lead.clinic_name || lead.lead_identity); }}
-                                                                    size="icon" variant="ghost" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            </>
-                                                        )}
-                                                        <Button
-                                                            onClick={(e) => { e.stopPropagation(); handleRowClick(lead); }}
-                                                            size="sm" variant="ghost" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                            Log Call
-                                                        </Button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )
-                                    })
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </Card>
-            </div>
-
-            {/* Modal Overlay / Log Call Drawer */}
-            {activeLead && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
-                    <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95 duration-200">
-                        <div className="flex justify-between items-center p-6 border-b border-slate-100 dark:border-slate-800">
-                            <div>
-                                <h2 className="text-xl font-bold text-slate-900 dark:text-white">Log Call Outcome</h2>
-                                <p className="text-sm text-slate-500 mt-1">Calling: <span className="font-semibold text-indigo-600 dark:text-indigo-400">{activeLead.lead_identity}</span></p>
-                            </div>
-                            <Button variant="ghost" size="icon" onClick={handleCloseModal} className="text-slate-400 hover:bg-slate-100">
-                                <X className="h-5 w-5" />
-                            </Button>
-                        </div>
-
-                        <form onSubmit={handleSubmit}>
-                            <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
-                                <div className="space-y-2">
-                                    <Label htmlFor="outcome">Call Outcome</Label>
-                                    <Select value={outcome} onValueChange={(v) => setOutcome(v as CallOutcome)} required>
-                                        <SelectTrigger id="outcome">
-                                            <SelectValue placeholder="Select outcome..." />
+                            {userRole !== 'SDR' && (
+                                <div className="w-40 shrink-0">
+                                    <Select value={sdrFilter} onValueChange={(v) => { setSdrFilter(v); setPage(1); }}>
+                                        <SelectTrigger className="bg-slate-50 rounded-xl">
+                                            <SelectValue placeholder="SDR Filter" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="Doctor Connected">Doctor Connected</SelectItem>
-                                            <SelectItem value="Assistant picked">Assistant picked</SelectItem>
-                                            <SelectItem value="Not Picked">Not Picked</SelectItem>
-                                            <SelectItem value="Invalid">Invalid</SelectItem>
-                                            <SelectItem value="Call back requested">Call back requested</SelectItem>
+                                            <SelectItem value="all">All SDRs</SelectItem>
+                                            <SelectItem value="unassigned">Unassigned Pool</SelectItem>
+                                            {uniqueSdrs.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            )}
 
-                                {outcome === 'Doctor Connected' && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 border rounded-xl bg-indigo-50/30 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/30">
+                            <div className="w-40 shrink-0">
+                                <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setPage(1); }}>
+                                    <SelectTrigger className="bg-slate-50 rounded-xl">
+                                        <SelectValue placeholder="City Filter" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Regions</SelectItem>
+                                        {uniqueCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="w-40 shrink-0">
+                                <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
+                                    <SelectTrigger className="bg-slate-50 rounded-xl">
+                                        <SelectValue placeholder="Lead Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="Active">Active Queue</SelectItem>
+                                        <SelectItem value="Meeting Booked">Meetings Booked</SelectItem>
+                                        <SelectItem value="Disqualified">Disqualified</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="w-40 shrink-0">
+                                <Select value={scheduleFilter} onValueChange={(v) => { setScheduleFilter(v); setPage(1); }}>
+                                    <SelectTrigger className="bg-slate-50 rounded-xl">
+                                        <SelectValue placeholder="Schedule Filter" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Timeframes</SelectItem>
+                                        <SelectItem value="today">Scheduled Today</SelectItem>
+                                        <SelectItem value="yesterday-overdue">Yesterday & Overdue</SelectItem>
+                                        {userRole !== 'SDR' && <SelectItem value="future">Future Follow-ups</SelectItem>}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="w-40 shrink-0">
+                                <Select value={actionFilter} onValueChange={(v) => { setActionFilter(v); setPage(1); }}>
+                                    <SelectTrigger className="bg-slate-50 rounded-xl">
+                                        <SelectValue placeholder="Action Type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Action Types</SelectItem>
+                                        <SelectItem value="new">New Leads</SelectItem>
+                                        <SelectItem value="follow-up">Follow-ups</SelectItem>
+                                        <SelectItem value="reattempt">Reattempts</SelectItem>
+                                        <SelectItem value="WhatsApp Follow Up">WhatsApp Follow-ups</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* calling segment Tabs */}
+                {!activeLead && !focusMode && (
+                    <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto">
+                        <button
+                            onClick={() => { setActiveTab('due'); setPage(1); }}
+                            className={`px-4 py-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'due' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                        >
+                            <ClipboardList className="h-4 w-4" />
+                            Active Call List (Today/Overdue)
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('future'); setPage(1); }}
+                            className={`px-4 py-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'future' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                        >
+                            <Calendar className="h-4 w-4" />
+                            Scheduled Future Follow-ups
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('whatsapp'); setPage(1); }}
+                            className={`px-4 py-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'whatsapp' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                        >
+                            <MessageSquare className="h-4 w-4" />
+                            WhatsApp Nurture Queue
+                        </button>
+                    </div>
+                )}
+
+                {/* === LAYOUT MODE A: FOCUS MODE WORKSPACE === */}
+                {focusMode && !activeLead ? (
+                    <Card className="p-12 text-center border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl bg-white dark:bg-slate-900">
+                        <div className="max-w-md mx-auto space-y-4">
+                            <div className="inline-flex p-4 bg-indigo-50 text-indigo-600 rounded-full">
+                                <Play className="h-8 w-8" />
+                            </div>
+                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">Active Focus Mode</h2>
+                            <p className="text-slate-500 text-sm">
+                                Focus Mode is enabled. Dial leads one-by-one according to priority. Hides tabular clutter to keep you locked on calls.
+                            </p>
+                            {leads.length > 0 ? (
+                                <Button
+                                    size="lg"
+                                    onClick={() => handleStartCall(leads[0])}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2 px-8 rounded-xl shadow-md"
+                                >
+                                    <PhoneCall className="h-4 w-4" />
+                                    Dial Next High Priority Lead
+                                </Button>
+                            ) : (
+                                <p className="text-emerald-600 font-bold bg-emerald-50 py-2 rounded">
+                                    🎉 Clean desk! No active leads due today in your queue.
+                                </p>
+                            )}
+                        </div>
+                    </Card>
+                ) : null}
+
+                {/* === ACTIVE CALLING SESSION INTERFACE (SPLIT SCREEN WORKSPACE) === */}
+                {activeLead ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
+                        
+                        {/* Call Outcomes Form (Left 2 columns) */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <Card className="shadow-md rounded-2xl overflow-hidden border-indigo-100 border-2">
+                                <CardHeader className="bg-indigo-50/50 p-6 border-b border-indigo-100 dark:border-indigo-900/30 flex flex-row justify-between items-start">
+                                    <div>
+                                        <CardTitle className="text-xl font-extrabold text-slate-900 dark:text-white">Active Calling Dashboard</CardTitle>
+                                        <CardDescription className="text-indigo-600 font-semibold mt-1">
+                                            Dialing: {activeLead.clinic_name || activeLead.lead_identity} ({activeLead.phone_number})
+                                        </CardDescription>
+                                    </div>
+                                    <Button variant="ghost" size="icon" onClick={handleReleaseCall} className="text-slate-400 hover:bg-white">
+                                        <X className="h-5 w-5" />
+                                    </Button>
+                                </CardHeader>
+                                
+                                <form onSubmit={handleSubmit}>
+                                    <CardContent className="p-6 space-y-6">
                                         <div className="space-y-2">
-                                            <Label htmlFor="interest">Interest Level (1-5)</Label>
-                                            <Select value={interestLevel.toString()} onValueChange={(v) => setInterestLevel(parseInt(v) as InterestLevel)} required>
-                                                <SelectTrigger id="interest">
-                                                    <SelectValue placeholder="Select level" />
+                                            <Label htmlFor="outcome" className="font-semibold text-slate-700">Call Outcome</Label>
+                                            <Select value={outcome} onValueChange={(v) => setOutcome(v as CallOutcome)} required>
+                                                <SelectTrigger id="outcome" className="rounded-xl border-slate-200">
+                                                    <SelectValue placeholder="Select call outcome..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="5">5 - Highly Interested (Booked)</SelectItem>
-                                                    <SelectItem value="4">4 - Interested</SelectItem>
-                                                    <SelectItem value="3">3 - Moderate</SelectItem>
-                                                    <SelectItem value="2">2 - Low</SelectItem>
-                                                    <SelectItem value="1">1 - Not Interested</SelectItem>
+                                                    <SelectItem value="Doctor Connected">Doctor Connected</SelectItem>
+                                                    <SelectItem value="Assistant picked">Assistant picked</SelectItem>
+                                                    <SelectItem value="Not Picked">Not Picked</SelectItem>
+                                                    <SelectItem value="Invalid">Invalid</SelectItem>
+                                                    <SelectItem value="Call back requested">Call back requested</SelectItem>
                                                 </SelectContent>
                                             </Select>
                                         </div>
 
-                                        <div className="space-y-2">
-                                            <Label htmlFor="doctor_type">Doctor Type</Label>
-                                            <Select value={doctorType} onValueChange={(v) => setDoctorType(v as DoctorType)} required>
-                                                <SelectTrigger id="doctor_type">
-                                                    <SelectValue placeholder="Select problem" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Rejected">Rejected</SelectItem>
-                                                    <SelectItem value="Busy">Busy</SelectItem>
-                                                    <SelectItem value="No problem admitted">No problem admitted</SelectItem>
-                                                    <SelectItem value="Inflow problem">Inflow problem</SelectItem>
-                                                    <SelectItem value="Treatment Completion problem">Treatment Completion problem</SelectItem>
-                                                    <SelectItem value="Both">Both</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        {outcome === 'Doctor Connected' && (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 border border-indigo-100 rounded-xl bg-indigo-50/20">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="interest" className="font-semibold text-slate-700">Interest Level</Label>
+                                                    <Select value={interestLevel.toString()} onValueChange={(v) => setInterestLevel(parseInt(v) as InterestLevel)} required>
+                                                        <SelectTrigger id="interest" className="bg-white rounded-lg">
+                                                            <SelectValue placeholder="Rank level (1-5)" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="5">5 - Highly Interested (Booked)</SelectItem>
+                                                            <SelectItem value="4">4 - Interested (Follow-up)</SelectItem>
+                                                            <SelectItem value="3">3 - Moderate (WhatsApp)</SelectItem>
+                                                            <SelectItem value="2">2 - Low (Disqualify)</SelectItem>
+                                                            <SelectItem value="1">1 - Not Interested (Disqualify)</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
 
-                                        {interestLevel === 5 && (
-                                            <div className="md:col-span-2 grid grid-cols-2 gap-4 pt-3 border-t border-indigo-100 dark:border-indigo-900 mt-2">
                                                 <div className="space-y-2">
-                                                    <Label htmlFor="meetingDate">Meeting Date</Label>
-                                                    <Input id="meetingDate" type="date" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)} required />
+                                                    <Label htmlFor="doctor_type" className="font-semibold text-slate-700">Doctor Pain Point</Label>
+                                                    <Select value={doctorType} onValueChange={(v) => setDoctorType(v as DoctorType)} required>
+                                                        <SelectTrigger id="doctor_type" className="bg-white rounded-lg">
+                                                            <SelectValue placeholder="Select primary problem..." />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="Rejected">Rejected</SelectItem>
+                                                            <SelectItem value="Busy">Busy</SelectItem>
+                                                            <SelectItem value="No problem admitted">No problem admitted</SelectItem>
+                                                            <SelectItem value="Inflow problem">Inflow problem</SelectItem>
+                                                            <SelectItem value="Treatment Completion problem">Treatment Completion problem</SelectItem>
+                                                            <SelectItem value="Both">Both problems</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="meetingTime">Meeting Time</Label>
-                                                    <Input id="meetingTime" type="time" value={meetingTime} onChange={(e) => setMeetingTime(e.target.value)} required />
-                                                </div>
+
+                                                {interestLevel === 5 && (
+                                                    <div className="md:col-span-2 grid grid-cols-2 gap-4 pt-4 border-t border-indigo-100 mt-2">
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="meetingDate" className="font-semibold text-slate-700">Meeting Date</Label>
+                                                            <Input id="meetingDate" type="date" value={meetingDate} onChange={(e) => setMeetingDate(e.target.value)} className="bg-white" required />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor="meetingTime" className="font-semibold text-slate-700">Meeting Time</Label>
+                                                            <Input id="meetingTime" type="time" value={meetingTime} onChange={(e) => setMeetingTime(e.target.value)} className="bg-white" required />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
+
+                                        {outcome === 'Doctor Connected' && (interestLevel === 3 || interestLevel === 4) && (
+                                            <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                                                <input
+                                                    type="checkbox"
+                                                    id="whatsappSent"
+                                                    checked={whatsappSent}
+                                                    onChange={(e) => setWhatsappSent(e.target.checked)}
+                                                    className="h-4 w-4 rounded border-slate-350 text-indigo-600 focus:ring-indigo-500"
+                                                />
+                                                <Label htmlFor="whatsappSent" className="cursor-pointer text-sm font-semibold text-slate-700">
+                                                    WhatsApp marketing resources successfully sent for nurture flow
+                                                </Label>
+                                            </div>
+                                        )}
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="notes" className="font-semibold text-slate-700">Call Notes <span className="text-rose-500">*</span></Label>
+                                            <Textarea
+                                                id="notes"
+                                                placeholder="Provide Call details. Explain response, objections, callbacks, or rescheduling context..."
+                                                className="min-h-[100px] rounded-xl"
+                                                value={notes}
+                                                onChange={(e) => setNotes(e.target.value)}
+                                                required
+                                            />
+                                        </div>
+                                    </CardContent>
+
+                                    <div className="flex justify-between p-5 bg-slate-50 border-t border-slate-100 rounded-b-2xl">
+                                        <Button type="button" variant="outline" onClick={handleReleaseCall} disabled={submitting} className="rounded-xl">
+                                            Cancel & Unlock
+                                        </Button>
+                                        <Button type="submit" disabled={submitting || !outcome} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 font-bold shadow-md">
+                                            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                                            Log Outcome
+                                        </Button>
                                     </div>
-                                )}
-
-                                {outcome === 'Doctor Connected' && (interestLevel === 3 || interestLevel === 4) && (
-                                    <div className="flex items-center gap-3 mt-4 p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
-                                        <input
-                                            type="checkbox"
-                                            id="whatsappSent"
-                                            checked={whatsappSent}
-                                            onChange={(e) => setWhatsappSent(e.target.checked)}
-                                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600"
-                                        />
-                                        <Label htmlFor="whatsappSent" className="cursor-pointer text-sm font-semibold">
-                                            WhatsApp Details Evaluated / Sent for Nurture Flow
-                                        </Label>
-                                    </div>
-                                )}
-
-                                <div className="space-y-2">
-                                    <Label htmlFor="notes">Call Notes <span className="text-red-500">*</span></Label>
-                                    <Textarea
-                                        id="notes"
-                                        placeholder="Add any additional context or remarks here..."
-                                        className="min-h-[100px] resize-y"
-                                        value={notes}
-                                        onChange={(e) => setNotes(e.target.value)}
-                                        required
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="flex justify-between p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
-                                <Button type="button" variant="outline" onClick={handleCloseModal} disabled={submitting}>
-                                    Cancel
-                                </Button>
-                                <Button type="submit" disabled={submitting || !outcome} className="gap-2 bg-indigo-600 hover:bg-indigo-700 text-white">
-                                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                                    Save Outcome
-                                </Button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit Lead Modal (ADMIN ONLY) */}
-            {editingLead && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-                    <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-2xl w-full max-w-lg border border-slate-200 dark:border-slate-800 p-6 space-y-6">
-                        <div className="flex justify-between items-center">
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                <Edit className="h-5 w-5 text-amber-600" />
-                                Correct Lead Data
-                            </h2>
-                            <Button variant="ghost" size="icon" onClick={() => setEditingLead(null)} className="text-slate-400">
-                                <X className="h-5 w-5" />
-                            </Button>
+                                </form>
+                            </Card>
                         </div>
 
-                        <form onSubmit={handleSaveEdit} className="space-y-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="editName">Clinic Name</Label>
-                                <Input id="editName" value={editClinicName} onChange={(e) => setEditClinicName(e.target.value)} required />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="editPhone">Phone Number</Label>
-                                <Input id="editPhone" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} required />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="editCity">City</Label>
-                                <Input id="editCity" value={editCity} onChange={(e) => setEditCity(e.target.value)} required />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="editNextActionDate">Next Action Date</Label>
-                                <Input id="editNextActionDate" type="date" value={editNextActionDate} onChange={(e) => setEditNextActionDate(e.target.value)} />
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-4 border-t">
-                                <Button type="button" variant="outline" onClick={() => setEditingLead(null)}>Cancel</Button>
-                                <Button type="submit" disabled={savingEdit} className="bg-amber-600 hover:bg-amber-700 text-white gap-2">
-                                    {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Corrections'}
-                                </Button>
-                            </div>
-                        </form>
+                        {/* Call History Timeline (Right 1 column) */}
+                        <div className="space-y-6">
+                            <Card className="shadow-sm border-slate-200 dark:border-slate-800 rounded-2xl h-full flex flex-col">
+                                <CardHeader className="p-5 border-b border-slate-100 dark:border-slate-800">
+                                    <div className="flex items-center gap-2">
+                                        <History className="h-4 w-4 text-indigo-600" />
+                                        <CardTitle className="text-sm font-bold">Call History Timeline</CardTitle>
+                                    </div>
+                                    <CardDescription>Previous dials for this client ({activeLead.touch_count || 0} total touches)</CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-5 flex-1 overflow-y-auto max-h-[500px]">
+                                    {!activeLead.logs || activeLead.logs.length === 0 ? (
+                                        <div className="text-center py-12 text-slate-400 text-xs">
+                                            No call history logs found. This is a fresh lead.
+                                        </div>
+                                    ) : (
+                                        <div className="relative border-l border-slate-250 dark:border-slate-700 pl-4 space-y-6 ml-2 text-xs">
+                                            {activeLead.logs.map((log: any) => (
+                                                <div key={log.id} className="relative">
+                                                    <span className="absolute -left-[21px] top-1 flex items-center justify-center bg-white border border-slate-300 rounded-full p-0.5">
+                                                        <Clock className="h-3 w-3 text-slate-500" />
+                                                    </span>
+                                                    <div className="space-y-1">
+                                                        <div className="flex justify-between items-center">
+                                                            <span className="font-bold text-slate-750">{log.outcome}</span>
+                                                            <span className="text-slate-400 text-[10px]">{format(new Date(log.createdAt), 'MMM dd, h:mm a')}</span>
+                                                        </div>
+                                                        {log.interest_level && (
+                                                            <p className="text-[10px] font-semibold text-indigo-600">Interest level: {log.interest_level}/5</p>
+                                                        )}
+                                                        <p className="text-slate-500 italic bg-slate-50 p-2 rounded-lg border">{log.notes || 'No notes added.'}</p>
+                                                        <p className="text-[9px] text-slate-400">Caller: {log.sdrName || 'System'}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
                     </div>
-                </div>
-            )}
+                ) : null}
+
+                {/* === LAYOUT MODE B: DATA TABLE VIEW === */}
+                {!activeLead && !focusMode && (
+                    <Card className="shadow-sm border-slate-200 dark:border-slate-800 overflow-hidden ring-1 ring-slate-200 dark:ring-slate-800 rounded-2xl">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left border-collapse min-w-[1000px]">
+                                <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        <th className="px-6 py-4 whitespace-nowrap">Name</th>
+                                        <th className="px-6 py-4 whitespace-nowrap">City</th>
+                                        <th className="px-6 py-4 text-center whitespace-nowrap">Touches</th>
+                                        <th className="px-6 py-4 text-center whitespace-nowrap">Next Action</th>
+                                        <th className="px-6 py-4 text-center whitespace-nowrap">Status</th>
+                                        <th className="px-6 py-4 whitespace-nowrap">Scheduled Date</th>
+                                        <th className="px-6 py-4 text-center whitespace-nowrap">Overdue</th>
+                                        <th className="px-6 py-4 text-right whitespace-nowrap">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                                    {loading ? (
+                                        <tr>
+                                            <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                                                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                                                Filtering pipeline...
+                                            </td>
+                                        </tr>
+                                    ) : leads.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={8} className="px-6 py-12 text-center">
+                                                <div className="flex flex-col items-center gap-3">
+                                                    <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full">
+                                                        <ClipboardList className="h-6 w-6 text-slate-400" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-base font-semibold text-slate-900 dark:text-slate-100">No matching leads found</p>
+                                                        <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
+                                                            Currently showing tab <b>{activeTab}</b>. Try selecting another tab or resetting search filter properties.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        leads.map((lead) => {
+                                            const isOverdue = lead.next_action_date && new Date(lead.next_action_date) < new Date(new Date().setHours(0, 0, 0, 0));
+                                            return (
+                                                <tr
+                                                    key={lead._rowIndex}
+                                                    onClick={() => handleStartCall(lead)}
+                                                    className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
+                                                >
+                                                    <td className="px-6 py-4 font-semibold text-slate-950 dark:text-slate-100 max-w-[200px] truncate" title={lead.lead_identity}>
+                                                        {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-slate-650 dark:text-slate-400" title={lead.city || undefined}>
+                                                        {lead.city || '-'}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400">
+                                                        <span className="font-semibold">{lead.touch_count}</span> / 5
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                        <span className="text-xs font-semibold px-2 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-md">
+                                                            {lead.next_action_type || 'New'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${lead.lead_status === 'Meeting Booked' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : lead.lead_status === 'Disqualified' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                                                            {lead.lead_status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap font-medium">
+                                                        <span className={isOverdue ? "text-red-600" : "text-slate-600"}>
+                                                            {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center whitespace-nowrap">
+                                                        {isOverdue ? (
+                                                            <span className="px-2.5 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase font-bold rounded-full border border-red-200">Overdue</span>
+                                                        ) : (
+                                                            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-semibold rounded-full border border-slate-200">On Track</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right whitespace-nowrap">
+                                                        <Button
+                                                            onClick={(e) => { e.stopPropagation(); handleStartCall(lead); }}
+                                                            size="sm"
+                                                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 opacity-0 group-hover:opacity-100 transition-opacity gap-1"
+                                                        >
+                                                            <Play className="h-3 w-3 fill-indigo-700" /> Start Call
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* table Pagination bar */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-150">
+                                <span className="text-xs text-slate-500">
+                                    Showing {(page - 1) * 15 + 1} - {Math.min(page * 15, totalLeads)} of {totalLeads} total leads
+                                </span>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-lg"
+                                        onClick={() => setPage(p => Math.max(p - 1, 1))}
+                                        disabled={page === 1}
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </Button>
+                                    <span className="text-xs font-bold px-3">
+                                        Page {page} of {totalPages}
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-lg"
+                                        onClick={() => setPage(p => Math.min(p + 1, totalPages))}
+                                        disabled={page === totalPages}
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </Card>
+                )}
+            </div>
         </div>
     );
 }

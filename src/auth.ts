@@ -24,10 +24,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     session: {
         strategy: "jwt",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
     },
     callbacks: {
         async signIn({ user, account, profile }) {
             if (!user.email) return false;
+
+            const now = new Date();
 
             // Check if user exists in our DB
             let dbUser = await prisma.user.findUnique({
@@ -41,7 +44,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         email: user.email,
                         name: user.name || '',
                         image: user.image || '',
-                        role: 'SDR' // Default generic fallback required by Prisma enum
+                        role: 'SDR', // Default generic fallback required by Prisma enum
+                        lastLoginAt: now,
+                        lastActiveAt: now
+                    }
+                });
+            } else {
+                await prisma.user.update({
+                    where: { email: user.email },
+                    data: {
+                        lastLoginAt: now,
+                        lastActiveAt: now
                     }
                 });
             }

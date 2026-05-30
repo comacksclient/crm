@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import prisma from '@/lib/prisma';
-import { updateLeadRow, mapPrismaToLead } from '@/lib/googleSheets';
+import { updateLeadRow, mapPrismaToLead } from '@/lib/leadService';
 
 export async function PATCH(req: Request) {
     try {
@@ -46,7 +46,7 @@ export async function PATCH(req: Request) {
             }
         });
 
-        // Sync with Google Sheets logic if necessary
+
         try {
             const mapped = mapPrismaToLead(updatedResult);
             await updateLeadRow(leadId, mapped);

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import prisma from '@/lib/prisma';
-import { updateLeadRow, mapPrismaToLead } from '@/lib/googleSheets';
+import { updateLeadRow, mapPrismaToLead } from '@/lib/leadService';
 
 export async function PATCH(req: Request) {
     try {

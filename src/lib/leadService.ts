@@ -1,19 +1,18 @@
-import { PrismaClient, Lead as PrismaLead, Meeting as PrismaMeeting } from '@prisma/client';
 import { Lead } from './types';
 import prisma from '@/lib/prisma';
 
-// Map Prisma DB Model to Frontend Lead Interface
+
 export const mapPrismaToLead = (dbLead: any): Lead => ({
-    _rowIndex: dbLead.id, // Using DB UUID instead of spreadsheet row index
+    _rowIndex: dbLead.id,
     lead_identity: dbLead.lead_identity,
     assignment_info: dbLead.assignment_info,
 
-    // Explicit Identity Flags
+
     clinic_name: dbLead.clinic_name,
     phone_number: dbLead.phone_number,
     city: dbLead.city,
 
-    // Hierarchy Data
+
     assigned_to: dbLead.assigned_to,
     assigned_date: dbLead.assigned_date,
     sdr_id: dbLead.sdr_id,
@@ -34,14 +33,13 @@ export const mapPrismaToLead = (dbLead: any): Lead => ({
     meeting_time: dbLead.meeting_time || '',
     lead_status: dbLead.lead_status as any,
     priority_score: dbLead.priority_score,
-    locked_by: null,
-    locked_at: null,
+    locked_by: dbLead.locked_by,
+    locked_at: dbLead.locked_at ? dbLead.locked_at.toISOString() : null,
+    logs: dbLead.logs || [],
 });
 
-// getCallQueue removed: Legacy Google Sheets function phased out for direct scalable Prisma calls.
-// In the new system, rowIndex is actually the UUID string of the lead
+
 export async function updateLeadRow(rowIndex: string, lead: Lead) {
-    // We throw the error so the API can report failure to the user/SDR
     await prisma.lead.update({
         where: { id: rowIndex },
         data: {
@@ -59,12 +57,14 @@ export async function updateLeadRow(rowIndex: string, lead: Lead) {
             overdue: lead.overdue || false,
             meeting_status: lead.meeting_status || false,
             meeting_date: lead.meeting_date || null,
-            meeting_time: lead.meeting_time || null
+            meeting_time: lead.meeting_time || null,
+            locked_by: lead.locked_by,
+            locked_at: lead.locked_at ? new Date(lead.locked_at) : null
         }
     });
 }
 
-// Hard Delete Lead from DB
+
 export async function deleteLeadRow(rowIndex: string) {
     try {
         await prisma.lead.delete({
@@ -75,28 +75,29 @@ export async function deleteLeadRow(rowIndex: string) {
     }
 }
 
+
 export async function appendToMeetings(lead: Lead, bookedBy: string) {
     try {
         await prisma.meeting.create({
             data: {
                 lead_id: lead._rowIndex as string,
 
-                // Lead Identity Snapshots
+
                 clinic_name: lead.clinic_name || lead.lead_identity.split(' - ')[0] || null,
                 phone_number: lead.phone_number || null,
 
                 meeting_date: lead.meeting_date || '',
                 meeting_time: lead.meeting_time || '',
-                meeting_status: 'Scheduled', // Specific lifecycle tracker
+                meeting_status: 'Scheduled',
                 booked_by: bookedBy
             }
         });
 
-        // Ensure the Lead status is also upgraded
+
         await prisma.lead.update({
             where: { id: lead._rowIndex as string },
             data: { lead_status: 'Meeting Booked' }
-        })
+        });
     } catch (e) {
         console.error("Failed to append meeting to Postgres:", e);
     }

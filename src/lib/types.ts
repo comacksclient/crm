@@ -68,6 +68,7 @@ export interface Lead {
     // Locking mechanism
     locked_by?: string | null;
     locked_at?: string | null; // ISO Timestamp
+    logs?: any[];
 }
 
 export interface CallLogPayload {
