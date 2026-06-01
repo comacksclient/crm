@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     Loader2, TrendingUp, PhoneCall, CalendarDays, Users, Target,
     AlertTriangle, Trophy, RefreshCw, CheckCircle2, Clock, XCircle,
@@ -10,6 +11,12 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+
+interface SDR {
+    id: string;
+    name: string | null;
+    email: string;
+}
 
 interface SdrStat {
     id: string;
@@ -34,6 +41,25 @@ interface RecentMeeting {
     createdAt: string;
 }
 
+interface EodMetrics {
+    noPickup: number;
+    invalidNum: number;
+    conversationHappened: number;
+    requestedCallback: number;
+    interested: number;
+    notInterested: number;
+    meetingBooked: number;
+    followUpCreated: number;
+}
+
+interface WeeklyMetrics {
+    followUp: { created: number; completed: number; pending: number; overdue: number };
+    connection: { connected: number; noPickup: number; invalidNum: number; callbackReq: number; notInterested: number };
+    conversion: { interestedLeads: number; meetingsBooked: number; qualifiedLeads: number; conversions: number };
+    activity: { totalCalls: number; freshCalls: number; followUpCalls: number; retryCalls: number; avgCallsPerDay: string };
+    efficiency: { connectRate: string; interestRate: string; bookingRate: string };
+}
+
 interface OverviewData {
     totalLeads: number;
     activeLeads: number;
@@ -56,6 +82,8 @@ interface OverviewData {
     dailyInvalid: number;
     dailyCallback: number;
     dailyMeetingsBooked: number;
+    dailyNotInterested: number;
+    dailyFollowUpCreated: number;
     dailyConnectRate: string;
     dailyInterestRate: string;
     dailyMeetingBookingRate: string;
@@ -67,9 +95,15 @@ interface OverviewData {
     weeklyInvalid: number;
     weeklyCallback: number;
     weeklyMeetingsBooked: number;
+    weeklyNotInterested: number;
+    weeklyFollowUpCreated: number;
     weeklyConnectRate: string;
     weeklyInterestRate: string;
     weeklyMeetingBookingRate: string;
+
+    sdrs: SDR[];
+    eod?: EodMetrics;
+    weekly?: WeeklyMetrics;
 }
 
 function KpiCard({ icon: Icon, label, value, sub, color }: {
@@ -105,13 +139,14 @@ export default function OverviewPage() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [statsPeriod, setStatsPeriod] = useState<'today' | 'weekly'>('today');
+    const [selectedSdr, setSelectedSdr] = useState<string>('all');
 
     const fetchData = useCallback(async (silent = false) => {
         if (!silent) setLoading(true);
         else setRefreshing(true);
 
         try {
-            const res = await fetch('/api/admin/overview');
+            const res = await fetch(`/api/admin/overview?sdrId=${selectedSdr}`);
             if (res.ok) {
                 const json = await res.json();
                 setData(json);
@@ -126,7 +161,7 @@ export default function OverviewPage() {
             setLoading(false);
             setRefreshing(false);
         }
-    }, []);
+    }, [selectedSdr]);
 
     useEffect(() => {
         fetchData();
@@ -187,7 +222,22 @@ export default function OverviewPage() {
                         </h1>
                         <p className="text-xs text-slate-500 mt-1 font-medium">Real-time performance indicators and operational metrics.</p>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                        {data.sdrs && data.sdrs.length > 0 && (
+                            <Select value={selectedSdr} onValueChange={setSelectedSdr}>
+                                <SelectTrigger className="w-[200px] h-9 text-xs rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
+                                    <SelectValue placeholder="All SDRs Combined" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All SDRs Combined</SelectItem>
+                                    {data.sdrs.map((sdr) => (
+                                        <SelectItem key={sdr.id} value={sdr.id}>
+                                            {sdr.name || sdr.email}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                         <span className="text-[10px] font-bold text-slate-400">
                             UPDATED: {format(new Date(data.generatedAt), 'hh:mm:ss a')}
                         </span>
@@ -243,94 +293,228 @@ export default function OverviewPage() {
                         </div>
                     </CardHeader>
                     <CardContent className="p-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {statsPeriod === 'today' ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+                                {/* EOD Calculations Grid */}
+                                <div className="lg:col-span-2 space-y-4">
+                                    <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <TrendingUp className="h-4 w-4 text-indigo-600" /> End of Day (EOD) Calculations
+                                    </h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Conversation Happened</span>
+                                            <span className="text-xl font-extrabold text-slate-900 dark:text-slate-100 mt-1">{data.eod?.conversationHappened || 0}</span>
+                                            <span className="text-[9px] text-slate-500">successful pick-ups</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Meetings Booked</span>
+                                            <span className="text-xl font-extrabold text-emerald-600 mt-1">{data.eod?.meetingBooked || 0}</span>
+                                            <span className="text-[9px] text-slate-500">scheduled meetings</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Follow-up Created</span>
+                                            <span className="text-xl font-extrabold text-blue-600 mt-1">{data.eod?.followUpCreated || 0}</span>
+                                            <span className="text-[9px] text-slate-500">callbacks scheduled</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Requested Callback</span>
+                                            <span className="text-xl font-extrabold text-amber-600 mt-1">{data.eod?.requestedCallback || 0}</span>
+                                            <span className="text-[9px] text-slate-500">callbacks requested</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">No Pickup</span>
+                                            <span className="text-lg font-bold text-slate-700 dark:text-slate-300 mt-1">{data.eod?.noPickup || 0}</span>
+                                            <span className="text-[9px] text-slate-500">calls not picked</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Invalid Num</span>
+                                            <span className="text-lg font-bold text-slate-700 dark:text-slate-300 mt-1">{data.eod?.invalidNum || 0}</span>
+                                            <span className="text-[9px] text-slate-500">rejected calls</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Interested</span>
+                                            <span className="text-lg font-bold text-emerald-600 mt-1">{data.eod?.interested || 0}</span>
+                                            <span className="text-[9px] text-slate-500">level &gt;= 3 conversion</span>
+                                        </div>
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900 border rounded-xl flex flex-col justify-center">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Not Interested</span>
+                                            <span className="text-lg font-bold text-rose-600 mt-1">{data.eod?.notInterested || 0}</span>
+                                            <span className="text-[9px] text-slate-500">level &lt; 3 conversion</span>
+                                        </div>
+                                    </div>
+                                </div>
 
-                            {/* Dials breakdown progress meters */}
-                            <div className="space-y-4">
-                                <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Activity className="h-4 w-4 text-indigo-600" /> Dial Outcome Breakdown
-                                </h3>
-                                <div className="space-y-3">
-                                    {[
-                                        { label: 'Total Attempted Calls', count: activeStats.calls, color: 'bg-indigo-600' },
-                                        { label: 'Doctor Connected', count: activeStats.connected, color: 'bg-emerald-500' },
-                                        { label: 'Callback Requested / Rescheduled', count: activeStats.callback, color: 'bg-blue-500' },
-                                        { label: 'No Pick-up / Busy', count: activeStats.noPickup, color: 'bg-amber-500' },
-                                        { label: 'Invalid / Disconnected', count: activeStats.invalid, color: 'bg-rose-500' }
-                                    ].map(({ label, count, color }) => {
-                                        const pct = activeStats.calls > 0 ? (count / activeStats.calls) * 100 : 0;
-                                        return (
-                                            <div key={label} className="space-y-1">
-                                                <div className="flex justify-between text-xs font-semibold">
-                                                    <span className="text-slate-600">{label}</span>
-                                                    <span className="font-bold text-slate-900">{count} ({pct.toFixed(0)}%)</span>
-                                                </div>
-                                                <div className="bg-slate-100 rounded-full h-2 overflow-hidden">
-                                                    <div className={`h-2 rounded-full ${color}`} style={{ width: `${pct}%` }} />
+                                {/* Efficiency Ratings */}
+                                <div className="space-y-4 lg:border-l lg:border-slate-200 lg:pl-6">
+                                    <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                        <Percent className="h-4 w-4 text-blue-600" /> Daily Performance Ratings
+                                    </h3>
+                                    <div className="space-y-3">
+                                        <div className="p-3.5 rounded-xl border border-slate-150 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Connect Rate</p>
+                                                <p className="text-[10px] text-slate-500 mt-0.5">Pickups vs dials</p>
+                                            </div>
+                                            <span className="text-lg font-extrabold text-indigo-650">{activeStats.connectRate}%</span>
+                                        </div>
+                                        <div className="p-3.5 rounded-xl border border-slate-150 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Interest Conversion</p>
+                                                <p className="text-[10px] text-slate-500 mt-0.5">High interest vs pickups</p>
+                                            </div>
+                                            <span className="text-lg font-extrabold text-blue-600">{activeStats.interestRate}%</span>
+                                        </div>
+                                        <div className="p-3.5 rounded-xl border border-slate-150 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
+                                            <div>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Meeting Booking Rate</p>
+                                                <p className="text-[10px] text-slate-500 mt-0.5">Bookings vs pickups</p>
+                                            </div>
+                                            <span className="text-lg font-extrabold text-emerald-600">{activeStats.bookingRate}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    {/* Connection & Conversion Metrics */}
+                                    <div className="space-y-4">
+                                        <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                            <PhoneCall className="h-4 w-4 text-indigo-600" /> Connection & Conversion (Weekly)
+                                        </h3>
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Connection Metrics</h4>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Connected Dials</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.connection?.connected || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">No Pickup Dials</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.connection?.noPickup || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Invalid Num</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.connection?.invalidNum || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Callback Requested</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.connection?.callbackReq || 0}</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
 
-                            {/* Efficiency Rates */}
-                            <div className="space-y-4 lg:border-l lg:border-slate-200 lg:pl-6">
-                                <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                    <Percent className="h-4 w-4 text-blue-600" /> Team Performance Ratings
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-1 gap-4">
-                                    <div className="p-4 rounded-xl border border-slate-150 bg-slate-50/50 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Connect Rate</p>
-                                            <p className="text-xs text-slate-500 mt-1">Doctor pick-ups vs total dials</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-xl font-extrabold text-indigo-650">{activeStats.connectRate}%</span>
+                                            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conversion Metrics</h4>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="p-2.5 border rounded-xl bg-indigo-50/10 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/30">
+                                                        <p className="text-[9px] font-semibold text-indigo-750 dark:text-indigo-400">Interested Leads</p>
+                                                        <p className="text-base font-extrabold text-indigo-900 dark:text-indigo-200 mt-0.5">{data.weekly?.conversion?.interestedLeads || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-emerald-50/10 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30">
+                                                        <p className="text-[9px] font-semibold text-emerald-750 dark:text-emerald-400">Meetings Booked</p>
+                                                        <p className="text-base font-extrabold text-emerald-900 dark:text-emerald-200 mt-0.5">{data.weekly?.conversion?.meetingsBooked || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Qualified Leads</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.conversion?.qualifiedLeads || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Total Conversions</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.conversion?.conversions || 0}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="p-4 rounded-xl border border-slate-150 bg-slate-50/50 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Interest Conversion</p>
-                                            <p className="text-xs text-slate-500 mt-1">Highly interested doctors (level = 3)</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-xl font-extrabold text-blue-600">{activeStats.interestRate}%</span>
+
+                                    {/* Follow-ups & Activity Metrics */}
+                                    <div className="space-y-4 lg:border-l lg:border-slate-200 lg:pl-6">
+                                        <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                            <CalendarDays className="h-4 w-4 text-indigo-650" /> Follow-ups & Activity (Weekly)
+                                        </h3>
+                                        <div className="space-y-4">
+                                            <div className="space-y-2">
+                                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Follow-up Metrics</h4>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Follow-ups Created</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.followUp?.created || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Follow-ups Completed</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.followUp?.completed || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Pending Follow-ups</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.followUp?.pending || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-rose-50/10 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/30">
+                                                        <p className="text-[9px] font-semibold text-rose-750 dark:text-rose-455">Overdue Follow-ups</p>
+                                                        <p className="text-base font-extrabold text-rose-900 dark:text-rose-200 mt-0.5">{data.weekly?.followUp?.overdue || 0}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Activity Metrics</h4>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Total Dials</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.activity?.totalCalls || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Fresh Leads Dialed</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.activity?.freshCalls || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Avg Calls / Day</p>
+                                                        <p className="text-base font-bold text-indigo-700 dark:text-indigo-400 mt-0.5">{data.weekly?.activity?.avgCallsPerDay || 0}</p>
+                                                    </div>
+                                                    <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
+                                                        <p className="text-[9px] font-semibold text-slate-400">Retry Dials</p>
+                                                        <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.activity?.retryCalls || 0}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="p-4 rounded-xl border border-slate-150 bg-slate-50/50 flex justify-between items-center">
-                                        <div>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Meeting Booking Rate</p>
-                                            <p className="text-xs text-slate-500 mt-1">Meetings secured from connected calls</p>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="text-xl font-extrabold text-emerald-600">{activeStats.bookingRate}%</span>
+
+                                    {/* Efficiency & Accuracy Ratings */}
+                                    <div className="space-y-4 lg:border-l lg:border-slate-200 lg:pl-6">
+                                        <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Percent className="h-4 w-4 text-indigo-650" /> Weekly Efficiency Ratings
+                                        </h3>
+                                        <div className="space-y-3">
+                                            <div className="p-3.5 bg-indigo-50/10 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex justify-between items-center">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-indigo-750 dark:text-indigo-400 uppercase tracking-wide">Connect Rate</p>
+                                                    <p className="text-[9px] text-indigo-600/85 mt-0.5">Pickups vs outbound dials</p>
+                                                </div>
+                                                <span className="text-lg font-extrabold text-indigo-900 dark:text-indigo-200">{data.weekly?.efficiency?.connectRate || '0.0'}%</span>
+                                            </div>
+
+                                            <div className="p-3.5 bg-blue-50/10 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-2xl flex justify-between items-center">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-blue-750 dark:text-blue-400 uppercase tracking-wide">Interest Conversion</p>
+                                                    <p className="text-[9px] text-blue-600/85 mt-0.5">High interest vs pickups</p>
+                                                </div>
+                                                <span className="text-lg font-extrabold text-blue-900 dark:text-blue-200">{data.weekly?.efficiency?.interestRate || '0.0'}%</span>
+                                            </div>
+
+                                            <div className="p-3.5 bg-emerald-50/10 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl flex justify-between items-center">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-emerald-750 dark:text-emerald-400 uppercase tracking-wide">Booking Rate</p>
+                                                    <p className="text-[9px] text-emerald-600/85 mt-0.5">Meetings booked vs pickups</p>
+                                                </div>
+                                                <span className="text-lg font-extrabold text-emerald-900 dark:text-emerald-200">{data.weekly?.efficiency?.bookingRate || '0.0'}%</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-
-                            {/* Analytics Summary */}
-                            <div className="space-y-4 lg:border-l lg:border-slate-200 lg:pl-6 flex flex-col justify-between">
-                                <div>
-                                    <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5 mb-3">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Pipeline Highlights
-                                    </h3>
-                                    <p className="text-xs text-slate-500 leading-relaxed">
-                                        The team successfully logged <b>{activeStats.calls}</b> outbound dials over this period. Out of these calls, <b>{activeStats.connected}</b> doctor connections were established.
-                                        <br /><br />
-                                        This resulted in a total of <b>{activeStats.meetingsBooked}</b> booked meetings directly added to the calendar, maintaining a high scheduling velocity.
-                                    </p>
-                                </div>
-                                <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-100">
-                                    <h4 className="text-xs font-bold text-indigo-900">Need to scale further?</h4>
-                                    <p className="text-[10px] text-indigo-700/80 mt-1">
-                                        Go to the Lead Distribution Center in the sidebar to divide unassigned lists or use the "Turbo Distribute" tool to keep SDR queues capped.
-                                    </p>
-                                </div>
-                            </div>
-
-                        </div>
+                        )}
                     </CardContent>
                 </Card>
 

@@ -68,7 +68,10 @@ export async function GET(req: Request) {
                 where: {
                     sdr_id: dbUser.id,
                     lead_status: 'Active',
-                    next_action_date: { lte: todayStr }
+                    OR: [
+                        { next_action_date: { lte: todayStr } },
+                        { next_action_date: null }
+                    ]
                 }
             });
 
@@ -106,6 +109,23 @@ export async function GET(req: Request) {
             }
         }
 
+        // Calculate Tomorrow Forecast Count
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = format(tomorrow, 'yyyy-MM-dd');
+        
+        let tomorrowWhere: any = {
+            lead_status: 'Active',
+            next_action_date: tomorrowStr
+        };
+        if (dbUser.role === 'SDR') {
+            tomorrowWhere.sdr_id = dbUser.id;
+        } else if (dbUser.role === 'MANAGER' && dbUser.team_id) {
+            tomorrowWhere.team_id = dbUser.team_id;
+        }
+        const tomorrowForecast = await prisma.lead.count({
+            where: tomorrowWhere
+        });
 
         const whereClause: any = {
             lead_status: leadStatus
@@ -224,7 +244,8 @@ export async function GET(req: Request) {
             total,
             page,
             totalPages,
-            teamName: dbUser.team?.name || 'Unassigned'
+            teamName: dbUser.team?.name || 'Unassigned',
+            tomorrowForecast
         });
 
     } catch (e: any) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Lead, CallOutcome, DoctorType, InterestLevel } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -10,10 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { 
-  Trash2, Edit, Loader2, CheckCircle2, X, Search, 
-  ChevronLeft, ChevronRight, Filter, Play, ClipboardList, 
-  History, Calendar, MessageSquare, PhoneCall, Clock, CheckCircle
+import {
+    Trash2, Edit, Loader2, CheckCircle2, X, Search,
+    ChevronLeft, ChevronRight, Filter, Play, ClipboardList,
+    History, Calendar, MessageSquare, PhoneCall, Clock, CheckCircle
 } from 'lucide-react';
 
 export default function QueuePage() {
@@ -35,6 +35,7 @@ export default function QueuePage() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalLeads, setTotalLeads] = useState(0);
+    const [tomorrowForecast, setTomorrowForecast] = useState<number>(0);
 
     // Layout States
     const [focusMode, setFocusMode] = useState(false);
@@ -75,7 +76,7 @@ export default function QueuePage() {
             // Map tabs to action filters or overdue filters
             let overdueParam = 'all';
             let nextActionParam = actionFilter;
-            
+
             if (userRole === 'SDR') {
                 if (activeTab === 'due') {
                     overdueParam = 'all';
@@ -112,6 +113,7 @@ export default function QueuePage() {
                 setLeads(data.leads || []);
                 setTotalPages(data.totalPages || 1);
                 setTotalLeads(data.total || 0);
+                setTomorrowForecast(data.tomorrowForecast || 0);
                 setTeamName(data.teamName || 'Unassigned');
 
                 // Extract cities & SDRs for advanced filtering drop downs
@@ -236,6 +238,77 @@ export default function QueuePage() {
         setPage(1);
     };
 
+    const groupedLeads = useMemo(() => {
+        const followUps: Lead[] = [];
+        const reattempts: Lead[] = [];
+        const newLeads: Lead[] = [];
+
+        leads.forEach(lead => {
+            const action = (lead.next_action_type || '').toLowerCase();
+            if (action === 'new') {
+                newLeads.push(lead);
+            } else if (action.includes('reattempt') || action.includes('retry')) {
+                reattempts.push(lead);
+            } else {
+                followUps.push(lead);
+            }
+        });
+
+        return { followUps, reattempts, newLeads };
+    }, [leads]);
+
+    const renderLeadRow = (lead: Lead) => {
+        const isOverdue = lead.next_action_date && new Date(lead.next_action_date) < new Date(new Date().setHours(0, 0, 0, 0));
+        return (
+            <tr
+                key={lead._rowIndex}
+                onClick={() => handleStartCall(lead)}
+                className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
+            >
+                <td className="px-6 py-4 font-semibold text-slate-950 dark:text-slate-100 max-w-[200px] truncate" title={lead.lead_identity}>
+                    {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
+                </td>
+                <td className="px-6 py-4 text-slate-650 dark:text-slate-400" title={lead.city || undefined}>
+                    {lead.city || '-'}
+                </td>
+                <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400">
+                    <span className="font-semibold">{lead.touch_count}</span> / 5
+                </td>
+                <td className="px-6 py-4 text-center whitespace-nowrap">
+                    <span className="text-xs font-semibold px-2 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-md">
+                        {lead.next_action_type || 'New'}
+                    </span>
+                </td>
+                <td className="px-6 py-4 text-center whitespace-nowrap">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${lead.lead_status === 'Meeting Booked' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : lead.lead_status === 'Disqualified' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
+                        {lead.lead_status}
+                    </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap font-medium">
+                    <span className={isOverdue ? "text-red-650 font-bold" : "text-slate-600"}>
+                        {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
+                    </span>
+                </td>
+                <td className="px-6 py-4 text-center whitespace-nowrap">
+                    {isOverdue ? (
+                        <span className="px-2.5 py-0.5 bg-rose-100 text-rose-700 text-[10px] uppercase font-bold rounded-full border border-rose-200">Overdue</span>
+                    ) : (
+                        <span className="px-2.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-semibold rounded-full border border-slate-200">On Track</span>
+                    )}
+                </td>
+                <td className="px-6 py-4 text-right whitespace-nowrap">
+                    <Button
+                        onClick={(e) => { e.stopPropagation(); handleStartCall(lead); }}
+                        size="sm"
+                        className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 opacity-0 group-hover:opacity-100 transition-opacity gap-1"
+                    >
+                        <Play className="h-3 w-3 fill-indigo-700" /> Start Call
+                    </Button>
+                </td>
+            </tr>
+        );
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 relative font-sans">
             <div className="max-w-7xl mx-auto space-y-6">
@@ -244,7 +317,7 @@ export default function QueuePage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
-                            📞 Outbound Calling Workspace
+                            📞 Comacks Dashboard
                             {teamName && (
                                 <span className="text-xs font-semibold px-2.5 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 rounded-full border border-indigo-150">
                                     {teamName}
@@ -254,7 +327,12 @@ export default function QueuePage() {
                         <p className="text-sm text-slate-500 mt-1">Review, filter, and dial corporate leads. Sorted dynamically by priority.</p>
                     </div>
 
-                    <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+                        {/* Tomorrow Forecast Badge */}
+                        <div className="flex items-center gap-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/30 p-2 rounded-xl text-left px-4 h-9">
+                            <span className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">Tomorrow Forecast</span>
+                            <span className="text-xs font-extrabold text-amber-800 dark:text-amber-200">{tomorrowForecast} follow-ups</span>
+                        </div>
                         {/* Focus Mode Pill Toggle */}
                         <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-full border border-slate-200 dark:border-slate-700">
                             <span className="text-xs font-semibold text-slate-600 dark:text-slate-350 px-2">Focus View</span>
@@ -418,7 +496,7 @@ export default function QueuePage() {
                 {/* === ACTIVE CALLING SESSION INTERFACE (SPLIT SCREEN WORKSPACE) === */}
                 {activeLead ? (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-200">
-                        
+
                         {/* Call Outcomes Form (Left 2 columns) */}
                         <div className="lg:col-span-2 space-y-6">
                             <Card className="shadow-md rounded-2xl overflow-hidden border-indigo-100 border-2">
@@ -433,7 +511,7 @@ export default function QueuePage() {
                                         <X className="h-5 w-5" />
                                     </Button>
                                 </CardHeader>
-                                
+
                                 <form onSubmit={handleSubmit}>
                                     <CardContent className="p-6 space-y-6">
                                         <div className="space-y-2">
@@ -627,58 +705,48 @@ export default function QueuePage() {
                                                 </div>
                                             </td>
                                         </tr>
-                                    ) : (
-                                        leads.map((lead) => {
-                                            const isOverdue = lead.next_action_date && new Date(lead.next_action_date) < new Date(new Date().setHours(0, 0, 0, 0));
-                                            return (
-                                                <tr
-                                                    key={lead._rowIndex}
-                                                    onClick={() => handleStartCall(lead)}
-                                                    className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
-                                                >
-                                                    <td className="px-6 py-4 font-semibold text-slate-950 dark:text-slate-100 max-w-[200px] truncate" title={lead.lead_identity}>
-                                                        {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-slate-650 dark:text-slate-400" title={lead.city || undefined}>
-                                                        {lead.city || '-'}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400">
-                                                        <span className="font-semibold">{lead.touch_count}</span> / 5
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                        <span className="text-xs font-semibold px-2 py-1 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 rounded-md">
-                                                            {lead.next_action_type || 'New'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${lead.lead_status === 'Meeting Booked' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : lead.lead_status === 'Disqualified' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                                                            {lead.lead_status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap font-medium">
-                                                        <span className={isOverdue ? "text-red-600" : "text-slate-600"}>
-                                                            {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-center whitespace-nowrap">
-                                                        {isOverdue ? (
-                                                            <span className="px-2.5 py-0.5 bg-red-100 text-red-700 text-[10px] uppercase font-bold rounded-full border border-red-200">Overdue</span>
-                                                        ) : (
-                                                            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-semibold rounded-full border border-slate-200">On Track</span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right whitespace-nowrap">
-                                                        <Button
-                                                            onClick={(e) => { e.stopPropagation(); handleStartCall(lead); }}
-                                                            size="sm"
-                                                            className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold border border-indigo-200 opacity-0 group-hover:opacity-100 transition-opacity gap-1"
-                                                        >
-                                                            <Play className="h-3 w-3 fill-indigo-700" /> Start Call
-                                                        </Button>
+                                    ) : userRole === 'SDR' && activeTab === 'due' ? (
+                                        <>
+                                            {/* Section 1: Follow-ups Due Today */}
+                                            {groupedLeads.followUps.length > 0 && (
+                                                <tr className="bg-indigo-50/50 dark:bg-indigo-950/20 font-bold text-indigo-700 dark:text-indigo-300 text-xs tracking-wider border-t">
+                                                    <td colSpan={8} className="px-6 py-2.5">
+                                                        📅 FOLLOW-UPS DUE TODAY ({groupedLeads.followUps.length} / 75)
                                                     </td>
                                                 </tr>
-                                            );
-                                        })
+                                            )}
+                                            {groupedLeads.followUps.map((lead: Lead) => renderLeadRow(lead))}
+
+                                            {/* Section 2: Reattempts Due Today */}
+                                            {groupedLeads.reattempts.length > 0 && (
+                                                <tr className="bg-amber-50/50 dark:bg-amber-950/20 font-bold text-amber-700 dark:text-amber-400 text-xs tracking-wider border-t">
+                                                    <td colSpan={8} className="px-6 py-2.5">
+                                                        🔁 REATTEMPTS DUE TODAY ({groupedLeads.reattempts.length})
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {groupedLeads.reattempts.map((lead: Lead) => renderLeadRow(lead))}
+
+                                            {/* Section 3: New Leads Capacity */}
+                                            {groupedLeads.newLeads.length > 0 && (
+                                                <tr className="bg-emerald-50/50 dark:bg-emerald-950/20 font-bold text-emerald-700 dark:text-emerald-400 text-xs tracking-wider border-t">
+                                                    <td colSpan={8} className="px-6 py-2.5">
+                                                        🆕 FRESH NEW LEADS ({groupedLeads.newLeads.length})
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            {groupedLeads.newLeads.map((lead: Lead) => renderLeadRow(lead))}
+
+                                            {groupedLeads.followUps.length === 0 && groupedLeads.reattempts.length === 0 && groupedLeads.newLeads.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={8} className="px-6 py-12 text-center text-slate-500">
+                                                        🎉 Clean desk! No active leads due today in your queue.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </>
+                                    ) : (
+                                        leads.map((lead) => renderLeadRow(lead))
                                     )}
                                 </tbody>
                             </table>

@@ -63,7 +63,11 @@ export async function GET(req: Request) {
                 assigned_date: lead.assigned_date || lead.createdAt.toISOString(),
                 assigned_by: lead.assigned_to || 'System',
                 status: lead.lead_status,
-                touches: lead.touch_count
+                touches: lead.touch_count,
+                lead_type: lead.lead_type || 'New',
+                call_outcome: lead.call_outcome || 'Pending',
+                next_action_type: lead.next_action_type || 'New',
+                interest_level: lead.interest_level
             };
         });
 

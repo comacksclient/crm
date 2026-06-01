@@ -50,19 +50,25 @@ export async function POST(req: Request) {
         const totalNeeded = teamSdrs.length * perSdrCount;
 
         // 3. Fetch unassigned leads for this team, ordered by priority
-        // Admins pull from the global unassigned pool (team_id: null) to push into this team.
-        // Managers pull from their team's unassigned pool (team_id: targetTeamId).
-        const sourceTeamId = dbUser.role === 'ADMIN' ? null : targetTeamId;
+        // Admins pull from target team's unassigned leads OR the global pool.
+        // Managers pull from target team's unassigned leads.
+        const sourceConditions = dbUser.role === 'ADMIN'
+            ? [
+                { team_id: targetTeamId, sdr_id: null, lead_status: 'Active' },
+                { team_id: null, sdr_id: null, lead_status: 'Active' }
+              ]
+            : [
+                { team_id: targetTeamId, sdr_id: null, lead_status: 'Active' }
+              ];
 
         const availableLeads = await prisma.lead.findMany({
             where: {
-                team_id: sourceTeamId,
-                sdr_id: null,
-                lead_status: 'Active'
+                OR: sourceConditions
             },
-            orderBy: {
-                priority_score: 'desc'
-            },
+            orderBy: [
+                { team_id: 'desc' }, // Target team leads first, then null/global leads
+                { priority_score: 'desc' }
+            ],
             take: totalNeeded,
             select: { id: true }
         });
@@ -70,6 +76,8 @@ export async function POST(req: Request) {
         if (availableLeads.length === 0) {
             return NextResponse.json({ error: 'No unassigned leads available for distribution' }, { status: 400 });
         }
+
+        const todayStr = new Date().toISOString().split('T')[0];
 
         // 4. Perform the distribution in a transaction
         let assignedCount = 0;
@@ -88,7 +96,8 @@ export async function POST(req: Request) {
                             team_id: targetTeamId,
                             manager_id: dbUser.id,
                             assigned_to: sdr.name || sdr.email,
-                            assigned_date: new Date().toISOString()
+                            assigned_date: new Date().toISOString(),
+                            next_action_date: todayStr // Set to today's active queue
                         }
                     });
                     assignedCount += sdrLeads.length;

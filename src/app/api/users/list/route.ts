@@ -32,6 +32,8 @@ export async function GET() {
                 team_id: true,
                 team: { select: { name: true } },
                 createdAt: true,
+                lastLoginAt: true,
+                lastActiveAt: true,
             }
         });
 

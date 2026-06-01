@@ -23,6 +23,8 @@ interface User {
     role: 'ADMIN' | 'MANAGER' | 'SDR';
     team_id: string | null;
     team: { name: string } | null;
+    lastLoginAt: string | null;
+    lastActiveAt: string | null;
 }
 
 export default function UsersManagementPage() {
@@ -183,7 +185,6 @@ export default function UsersManagementPage() {
     };
 
     const handlePurgeLeads = async (user: User) => {
-        const leadCount = 0; // We don't know the exact count easily here without extra API, but we specify "all"
         if (!confirm(`Are you sure you want to PERMANENTLY delete ALL leads currently assigned to ${user.name || user.email}? This action cannot be undone.`)) {
             return;
         }
@@ -346,20 +347,22 @@ export default function UsersManagementPage() {
                                             <th className="px-6 py-4">SaaS Identity</th>
                                             <th className="px-6 py-4">System Role</th>
                                             <th className="px-6 py-4">Allocated Team</th>
+                                            <th className="px-6 py-4">Last Login</th>
+                                            <th className="px-6 py-4">Last Active</th>
                                             <th className="px-6 py-4 text-right">Commit Changes</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                                         {loading ? (
                                             <tr>
-                                                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                                                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                                                     <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
                                                     Loading registry...
                                                 </td>
                                             </tr>
                                         ) : users.length === 0 ? (
                                             <tr>
-                                                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                                                <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
                                                     No users found.
                                                 </td>
                                             </tr>
@@ -368,6 +371,23 @@ export default function UsersManagementPage() {
                                                 const currentRoleState = editingRoles[user.id] || user.role;
                                                 const currentTeamState = editingTeams[user.id] !== undefined ? editingTeams[user.id] : (user.team_id || 'none');
                                                 const isDirty = editingRoles[user.id] !== undefined || editingTeams[user.id] !== undefined;
+
+                                                const formatUserDate = (dateStr: string | null) => {
+                                                    if (!dateStr) return <span className="text-slate-400 italic">Never</span>;
+                                                    try {
+                                                        const date = new Date(dateStr);
+                                                        if (isNaN(date.getTime())) return <span className="text-slate-400 italic">Never</span>;
+                                                        // Simple format: Mon Jun 01, 1:42 AM
+                                                        return date.toLocaleDateString('en-US', {
+                                                            month: 'short',
+                                                            day: '2-digit',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        });
+                                                    } catch {
+                                                        return <span className="text-slate-400 italic">Never</span>;
+                                                    }
+                                                };
 
                                                 return (
                                                     <tr key={user.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
@@ -399,6 +419,12 @@ export default function UsersManagementPage() {
                                                                     ))}
                                                                 </SelectContent>
                                                             </Select>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-xs">
+                                                            {formatUserDate(user.lastLoginAt)}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-slate-600 dark:text-slate-400 text-xs">
+                                                            {formatUserDate(user.lastActiveAt)}
                                                         </td>
                                                         <td className="px-6 py-4 text-right flex items-center justify-end gap-2">
                                                             <Button

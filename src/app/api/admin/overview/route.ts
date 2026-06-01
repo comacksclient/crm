@@ -5,7 +5,7 @@ import { startOfDay, subDays } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
         const session = await auth();
         if (!session || !session.user) {
@@ -41,7 +41,7 @@ export async function GET() {
 
         if (unloggedLeadsCount > 0 || unloggedMeetingsCount > 0) {
             console.log(`[Backfill] Syncing data: Found ${unloggedLeadsCount} unlogged leads & ${unloggedMeetingsCount} unlogged meetings.`);
-            
+
             if (unloggedLeadsCount > 0) {
                 const leadsToBackfill = await prisma.lead.findMany({
                     where: {
@@ -173,7 +173,20 @@ export async function GET() {
             console.log(`[Backfill] Database backfill sync completed successfully.`);
         }
 
-        // 1. Configure Scope (Managers see their team, Admins see everything)
+        const url = new URL(req.url);
+        const sdrId = url.searchParams.get('sdrId') || 'all';
+
+        // 1. Fetch available SDRs dropdown list based on role boundaries
+        const sdrSelectorWhere: any = { role: 'SDR' };
+        if (dbUser.role === 'MANAGER' && dbUser.team_id) {
+            sdrSelectorWhere.team_id = dbUser.team_id;
+        }
+        const sdrsList = await prisma.user.findMany({
+            where: sdrSelectorWhere,
+            select: { id: true, name: true, email: true, lastActiveAt: true }
+        });
+
+        // 2. Configure Scope (Managers see their team, Admins see everything)
         const leadScope: any = {};
         const logScope: any = {};
         const meetingScope: any = {};
@@ -184,12 +197,22 @@ export async function GET() {
             meetingScope.lead = { team_id: dbUser.team_id };
         }
 
-        // Time periods
+        // Apply SDR filter if selected
+        if (sdrId !== 'all') {
+            leadScope.sdr_id = sdrId;
+            logScope.sdr_id = sdrId;
+            const sdrUser = sdrsList.find(s => s.id === sdrId);
+            if (sdrUser) {
+                meetingScope.booked_by = sdrUser.email;
+            }
+        }
+
+
         const now = new Date();
         const todayStart = startOfDay(now);
         const weekStart = startOfDay(subDays(now, 7));
 
-        // 2. Fetch General Lead Status Counts & Meeting Counts
+
         const [
             totalLeads,
             activeLeads,
@@ -210,23 +233,22 @@ export async function GET() {
             prisma.meeting.count({ where: { ...meetingScope, meeting_status: 'No Show' } })
         ]);
 
-        // 3. Fetch Call Counts and Connections (Daily vs Weekly)
-        // Daily Logs
+
         const dailyLogs = await prisma.callLog.findMany({
             where: {
                 ...logScope,
                 createdAt: { gte: todayStart }
             },
-            select: { outcome: true, interest_level: true }
+            select: { outcome: true, interest_level: true, notes: true, lead_id: true }
         });
 
-        // Weekly Logs
+
         const weeklyLogs = await prisma.callLog.findMany({
             where: {
                 ...logScope,
                 createdAt: { gte: weekStart }
             },
-            select: { outcome: true, interest_level: true }
+            select: { outcome: true, interest_level: true, lead_id: true, createdAt: true }
         });
 
         // Compute metrics helper
@@ -237,12 +259,19 @@ export async function GET() {
             let invalid = 0;
             let callbackReq = 0;
             let interested = 0;
+            let notInterested = 0;
+            let followUpCreated = 0;
 
             logs.forEach(log => {
                 if (log.outcome === 'Doctor Connected') {
                     connected++;
                     if (log.interest_level && log.interest_level >= 3) {
                         interested++;
+                        if (log.interest_level === 3 || log.interest_level === 4) {
+                            followUpCreated++;
+                        }
+                    } else if (log.interest_level && log.interest_level < 3) {
+                        notInterested++;
                     }
                 } else if (log.outcome === 'Not Picked') {
                     noPickup++;
@@ -250,6 +279,7 @@ export async function GET() {
                     invalid++;
                 } else if (log.outcome === 'Call back requested' || log.outcome === 'Assistant picked') {
                     callbackReq++;
+                    followUpCreated++;
                 }
             });
 
@@ -263,6 +293,8 @@ export async function GET() {
                 invalid,
                 callbackReq,
                 interested,
+                notInterested,
+                followUpCreated,
                 connectRate,
                 interestRate
             };
@@ -271,7 +303,7 @@ export async function GET() {
         const dailyMetrics = processCallMetrics(dailyLogs);
         const weeklyMetrics = processCallMetrics(weeklyLogs);
 
-        // 4. Fetch Meeting Metrics (Created daily vs weekly)
+        // 5. Fetch Meeting Metrics (Created daily vs weekly)
         const [meetingsToday, meetingsThisWeek] = await Promise.all([
             prisma.meeting.count({
                 where: {
@@ -345,7 +377,159 @@ export async function GET() {
             }
         });
 
-        // 7. Calculate Efficiency Metrics (Daily & Weekly)
+        // 7. Calculate Pending Follow-ups for SDR evaluations
+        const pendingFollowups = await prisma.lead.count({
+            where: {
+                ...leadScope,
+                lead_status: 'Active',
+                overdue: false,
+                next_action_date: { not: null }
+            }
+        });
+
+        // Helper to compile EOD (Daily) Metrics
+        const calculateEodMetrics = () => {
+            let noPickup = 0;
+            let invalidNum = 0;
+            let conversationHappened = 0;
+            let requestedCallback = 0;
+            let interested = 0;
+            let notInterested = 0;
+            let followUpCreated = 0;
+
+            dailyLogs.forEach(log => {
+                const outcome = log.outcome;
+                const interest = log.interest_level;
+
+                if (outcome === 'Not Picked') {
+                    noPickup++;
+                } else if (outcome === 'Invalid') {
+                    invalidNum++;
+                } else if (outcome === 'Doctor Connected') {
+                    conversationHappened++;
+                    if (interest && interest >= 3) {
+                        interested++;
+                        if (interest === 3 || interest === 4) {
+                            followUpCreated++;
+                        }
+                    } else if (interest && interest < 3) {
+                        notInterested++;
+                    }
+                } else if (outcome === 'Call back requested' || outcome === 'Assistant picked') {
+                    requestedCallback++;
+                    followUpCreated++;
+                }
+            });
+
+            return {
+                noPickup,
+                invalidNum,
+                conversationHappened,
+                requestedCallback,
+                interested,
+                notInterested,
+                meetingBooked: meetingsToday,
+                followUpCreated
+            };
+        };
+
+        // Helper to compile Weekly Metrics
+        const calculateWeeklyMetrics = () => {
+            let connected = 0;
+            let noPickup = 0;
+            let invalidNum = 0;
+            let callbackReq = 0;
+            let notInterested = 0;
+
+            let interestedLeads = 0;
+            let qualifiedLeads = 0;
+
+            let totalCalls = weeklyLogs.length;
+            let freshCalls = 0;
+            let retryCalls = 0;
+            let followUpCalls = 0;
+
+            const leadHistoryMap = new Map();
+
+            weeklyLogs.forEach(log => {
+                const outcome = log.outcome;
+                const interest = log.interest_level;
+
+                if (outcome === 'Doctor Connected') {
+                    connected++;
+                    if (interest && interest >= 3) {
+                        interestedLeads++;
+                        qualifiedLeads++;
+                    } else if (interest && interest < 3) {
+                        notInterested++;
+                    }
+                } else if (outcome === 'Not Picked') {
+                    noPickup++;
+                } else if (outcome === 'Invalid') {
+                    invalidNum++;
+                } else if (outcome === 'Call back requested' || outcome === 'Assistant picked') {
+                    callbackReq++;
+                }
+
+                if (!leadHistoryMap.has(log.lead_id)) {
+                    leadHistoryMap.set(log.lead_id, 0);
+                    freshCalls++;
+                } else {
+                    retryCalls++;
+                }
+
+                if (outcome === 'Call back requested' || outcome === 'Assistant picked') {
+                    followUpCalls++;
+                }
+            });
+
+            const followUpsCreated = dailyLogs.filter(log =>
+                log.outcome === 'Call back requested' ||
+                log.outcome === 'Assistant picked' ||
+                (log.outcome === 'Doctor Connected' && log.interest_level && log.interest_level >= 3 && log.interest_level <= 4)
+            ).length;
+
+            const avgCallsPerDay = (totalCalls / 7).toFixed(1);
+
+            const connectRate = totalCalls > 0 ? ((connected / totalCalls) * 100).toFixed(1) : '0.0';
+            const interestRate = connected > 0 ? ((interestedLeads / connected) * 100).toFixed(1) : '0.0';
+            const bookingRate = connected > 0 ? ((meetingsThisWeek / connected) * 100).toFixed(1) : '0.0';
+
+            return {
+                followUp: {
+                    created: followUpsCreated,
+                    completed: totalCalls - freshCalls,
+                    pending: pendingFollowups,
+                    overdue: overdueLeads
+                },
+                connection: {
+                    connected,
+                    noPickup,
+                    invalidNum,
+                    callbackReq,
+                    notInterested
+                },
+                conversion: {
+                    interestedLeads,
+                    meetingsBooked: meetingsThisWeek,
+                    qualifiedLeads,
+                    conversions: meetingsThisWeek
+                },
+                activity: {
+                    totalCalls,
+                    freshCalls,
+                    followUpCalls,
+                    retryCalls,
+                    avgCallsPerDay
+                },
+                efficiency: {
+                    connectRate,
+                    interestRate,
+                    bookingRate
+                }
+            };
+        };
+
         const dailyMeetingRate = dailyMetrics.connected > 0 ? ((meetingsToday / dailyMetrics.connected) * 100).toFixed(1) : '0.0';
         const weeklyMeetingRate = weeklyMetrics.connected > 0 ? ((meetingsThisWeek / weeklyMetrics.connected) * 100).toFixed(1) : '0.0';
 
@@ -371,6 +555,8 @@ export async function GET() {
             dailyInvalid: dailyMetrics.invalid,
             dailyCallback: dailyMetrics.callbackReq,
             dailyMeetingsBooked: meetingsToday,
+            dailyNotInterested: dailyMetrics.notInterested,
+            dailyFollowUpCreated: dailyMetrics.followUpCreated,
             dailyConnectRate: dailyMetrics.connectRate,
             dailyInterestRate: dailyMetrics.interestRate,
             dailyMeetingBookingRate: dailyMeetingRate,
@@ -382,14 +568,21 @@ export async function GET() {
             weeklyInvalid: weeklyMetrics.invalid,
             weeklyCallback: weeklyMetrics.callbackReq,
             weeklyMeetingsBooked: meetingsThisWeek,
+            weeklyNotInterested: weeklyMetrics.notInterested,
+            weeklyFollowUpCreated: weeklyMetrics.followUpCreated,
             weeklyConnectRate: weeklyMetrics.connectRate,
             weeklyInterestRate: weeklyMetrics.interestRate,
             weeklyMeetingBookingRate: weeklyMeetingRate,
 
-            // SDR Leaderboard
+            // SDR list and Leaderboard
+            sdrs: sdrsList.map(s => ({ id: s.id, name: s.name, email: s.email })),
             sdrLeaderboard,
             recentMeetings,
-            generatedAt: new Date().toISOString()
+            generatedAt: new Date().toISOString(),
+
+            // Consolidation metrics
+            eod: calculateEodMetrics(),
+            weekly: calculateWeeklyMetrics()
         });
 
     } catch (e: any) {
