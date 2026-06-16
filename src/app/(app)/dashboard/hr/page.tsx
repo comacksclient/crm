@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { CandidateTable } from '@/components/hr/CandidateTable';
-import { AddCandidateModal, EditCandidateModal } from '@/components/hr/CandidateModals';
+import { AddCandidateModal, EditCandidateModal, BulkUploadCandidateModal } from '@/components/hr/CandidateModals';
 import { Candidate } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,7 +15,8 @@ import {
     TrendingUp,
     Search,
     RefreshCw,
-    Loader2
+    Loader2,
+    Upload
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
@@ -26,8 +27,9 @@ export default function HRDashboard() {
     const [refreshing, setRefreshing] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Modal states
+
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [editingCandidate, setEditingCandidate] = useState<Candidate | null>(null);
 
     const fetchCandidates = useCallback(async (isSilent = false) => {
@@ -102,6 +104,14 @@ export default function HRDashboard() {
                             disabled={refreshing}
                         >
                             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => setIsUploadModalOpen(true)}
+                            className="gap-2 shrink-0 border-slate-200 dark:border-slate-800"
+                        >
+                            <Upload className="h-4 w-4 text-slate-500" />
+                            Import CSV
                         </Button>
                         <Button
                             variant="default"
@@ -195,6 +205,16 @@ export default function HRDashboard() {
                     onClose={() => setEditingCandidate(null)}
                     onSuccess={() => {
                         setEditingCandidate(null);
+                        fetchCandidates(true);
+                    }}
+                />
+            )}
+
+            {isUploadModalOpen && (
+                <BulkUploadCandidateModal
+                    onClose={() => setIsUploadModalOpen(false)}
+                    onSuccess={() => {
+                        setIsUploadModalOpen(false);
                         fetchCandidates(true);
                     }}
                 />

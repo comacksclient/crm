@@ -20,7 +20,7 @@ interface User {
     id: string;
     email: string;
     name: string | null;
-    role: 'ADMIN' | 'MANAGER' | 'SDR';
+    role: 'ADMIN' | 'MANAGER' | 'SDR' | 'HR';
     team_id: string | null;
     team: { name: string } | null;
     lastLoginAt: string | null;
@@ -34,12 +34,12 @@ export default function UsersManagementPage() {
     const [submitting, setSubmitting] = useState<string | null>(null);
     const [profile, setProfile] = useState<{ id: string, role: string, teamName: string } | null>(null);
 
-    // Team Builder
+
     const [newTeamName, setNewTeamName] = useState('');
     const [creatingTeam, setCreatingTeam] = useState(false);
 
-    // Editing state per user ID to allow inline modifications
-    const [editingRoles, setEditingRoles] = useState<Record<string, 'ADMIN' | 'MANAGER' | 'SDR'>>({});
+
+    const [editingRoles, setEditingRoles] = useState<Record<string, 'ADMIN' | 'MANAGER' | 'SDR' | 'HR'>>({});
     const [editingTeams, setEditingTeams] = useState<Record<string, string>>({});
     const [deletingUser, setDeletingUser] = useState<string | null>(null);
     const [purgingLeads, setPurgingLeads] = useState<string | null>(null);
@@ -115,7 +115,7 @@ export default function UsersManagementPage() {
         }
     };
 
-    const handleRoleChange = (userId: string, newRole: 'ADMIN' | 'MANAGER' | 'SDR') => {
+    const handleRoleChange = (userId: string, newRole: 'ADMIN' | 'MANAGER' | 'SDR' | 'HR') => {
         setEditingRoles(prev => ({ ...prev, [userId]: newRole }));
     };
 
@@ -404,6 +404,7 @@ export default function UsersManagementPage() {
                                                                     <SelectItem value="SDR">SDR (Caller)</SelectItem>
                                                                     <SelectItem value="MANAGER">Manager</SelectItem>
                                                                     <SelectItem value="ADMIN">God Admin</SelectItem>
+                                                                    <SelectItem value="HR">HR Recruiter</SelectItem>
                                                                 </SelectContent>
                                                             </Select>
                                                         </td>
