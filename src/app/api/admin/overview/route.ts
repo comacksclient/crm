@@ -321,7 +321,7 @@ export async function GET(req: Request) {
 
         // 5. SDR Live Leaderboard & Performance Tickers
         const sdrWhere: any = { role: 'SDR' };
-        if (dbUser.team_id) {
+        if (dbUser.role === 'MANAGER' && dbUser.team_id) {
             sdrWhere.team_id = dbUser.team_id;
         }
 

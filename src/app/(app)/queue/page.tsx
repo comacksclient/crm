@@ -30,6 +30,7 @@ export default function QueuePage() {
     const [scheduleFilter, setScheduleFilter] = useState('all');
     const [uniqueCities, setUniqueCities] = useState<string[]>([]);
     const [uniqueSdrs, setUniqueSdrs] = useState<string[]>([]);
+    const [sdrList, setSdrList] = useState<string[]>([]);
 
     // Pagination State
     const [page, setPage] = useState(1);
@@ -85,7 +86,7 @@ export default function QueuePage() {
                 }
             } else {
                 if (activeTab === 'due') {
-                    overdueParam = 'true';
+                    overdueParam = 'all';
                 } else if (activeTab === 'future') {
                     overdueParam = 'false';
                 }
@@ -115,6 +116,7 @@ export default function QueuePage() {
                 setTotalLeads(data.total || 0);
                 setTomorrowForecast(data.tomorrowForecast || 0);
                 setTeamName(data.teamName || 'Unassigned');
+                setSdrList(data.sdrs || []);
 
                 // Extract cities & SDRs for advanced filtering drop downs
                 if (data.leads && data.leads.length > 0) {
@@ -268,7 +270,7 @@ export default function QueuePage() {
                 <td className="px-6 py-4 font-semibold text-slate-950 dark:text-slate-100 max-w-[200px] truncate" title={lead.lead_identity}>
                     {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
                 </td>
-                <td className="px-6 py-4 text-slate-650 dark:text-slate-400" title={lead.city || undefined}>
+                <td className="px-6 py-4 text-slate-600 dark:text-slate-400" title={lead.city || undefined}>
                     {lead.city || '-'}
                 </td>
                 <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400">
@@ -285,7 +287,7 @@ export default function QueuePage() {
                     </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap font-medium">
-                    <span className={isOverdue ? "text-red-650 font-bold" : "text-slate-600"}>
+                    <span className={isOverdue ? "text-red-600 font-bold" : "text-slate-600"}>
                         {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
                     </span>
                 </td>
@@ -335,7 +337,7 @@ export default function QueuePage() {
                         </div>
                         {/* Focus Mode Pill Toggle */}
                         <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-full border border-slate-200 dark:border-slate-700">
-                            <span className="text-xs font-semibold text-slate-600 dark:text-slate-350 px-2">Focus View</span>
+                            <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 px-2">Focus View</span>
                             <button
                                 onClick={() => setFocusMode(!focusMode)}
                                 className={`px-4 py-1 text-xs font-bold rounded-full transition-all duration-200 ${focusMode ? 'bg-indigo-600 text-white shadow-sm' : 'bg-transparent text-slate-400'}`}
@@ -361,7 +363,7 @@ export default function QueuePage() {
                                     placeholder="Search clinic, phone number, city..."
                                     value={searchQuery}
                                     onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-                                    className="pl-9 bg-slate-50 border-slate-250 rounded-xl"
+                                    className="pl-9 bg-slate-50 border-slate-200 rounded-xl"
                                 />
                             </div>
 
@@ -374,23 +376,27 @@ export default function QueuePage() {
                                         <SelectContent>
                                             <SelectItem value="all">All SDRs</SelectItem>
                                             <SelectItem value="unassigned">Unassigned Pool</SelectItem>
-                                            {uniqueSdrs.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                                            {Array.from(new Set(sdrList.length > 0 ? sdrList : uniqueSdrs)).map(s => (
+                                                <SelectItem key={s} value={s}>{s}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
                             )}
 
-                            <div className="w-40 shrink-0">
-                                <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setPage(1); }}>
-                                    <SelectTrigger className="bg-slate-50 rounded-xl">
-                                        <SelectValue placeholder="City Filter" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Regions</SelectItem>
-                                        {uniqueCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            {userRole !== 'SDR' && (
+                                <div className="w-40 shrink-0">
+                                    <Select value={cityFilter} onValueChange={(v) => { setCityFilter(v); setPage(1); }}>
+                                        <SelectTrigger className="bg-slate-50 rounded-xl">
+                                            <SelectValue placeholder="City Filter" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Regions</SelectItem>
+                                            {uniqueCities.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
 
                             <div className="w-40 shrink-0">
                                 <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
@@ -587,7 +593,7 @@ export default function QueuePage() {
                                                     id="whatsappSent"
                                                     checked={whatsappSent}
                                                     onChange={(e) => setWhatsappSent(e.target.checked)}
-                                                    className="h-4 w-4 rounded border-slate-350 text-indigo-600 focus:ring-indigo-500"
+                                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                                                 />
                                                 <Label htmlFor="whatsappSent" className="cursor-pointer text-sm font-semibold text-slate-700">
                                                     WhatsApp marketing resources successfully sent for nurture flow
@@ -637,7 +643,7 @@ export default function QueuePage() {
                                             No call history logs found. This is a fresh lead.
                                         </div>
                                     ) : (
-                                        <div className="relative border-l border-slate-250 dark:border-slate-700 pl-4 space-y-6 ml-2 text-xs">
+                                        <div className="relative border-l border-slate-200 dark:border-slate-700 pl-4 space-y-6 ml-2 text-xs">
                                             {activeLead.logs.map((log: any) => (
                                                 <div key={log.id} className="relative">
                                                     <span className="absolute -left-[21px] top-1 flex items-center justify-center bg-white border border-slate-300 rounded-full p-0.5">
@@ -645,7 +651,7 @@ export default function QueuePage() {
                                                     </span>
                                                     <div className="space-y-1">
                                                         <div className="flex justify-between items-center">
-                                                            <span className="font-bold text-slate-750">{log.outcome}</span>
+                                                            <span className="font-bold text-slate-700">{log.outcome}</span>
                                                             <span className="text-slate-400 text-[10px]">{format(new Date(log.createdAt), 'MMM dd, h:mm a')}</span>
                                                         </div>
                                                         {log.interest_level && (

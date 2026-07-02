@@ -143,7 +143,10 @@ export async function GET(req: Request) {
                     // SDR checking future tab
                     whereClause.next_action_date = { gt: todayStr };
                 } else {
-                    whereClause.next_action_date = { lte: todayStr };
+                    whereClause.OR = [
+                        { next_action_date: { lte: todayStr } },
+                        { next_action_date: null }
+                    ];
                 }
             }
         } else if (dbUser.role === 'MANAGER') {
@@ -157,7 +160,29 @@ export async function GET(req: Request) {
         // Apply admin/manager filters
         if (dbUser.role !== 'SDR') {
             if (sdrIdFilter !== 'all') {
-                whereClause.sdr_id = sdrIdFilter === 'unassigned' ? null : sdrIdFilter;
+                if (sdrIdFilter === 'unassigned') {
+                    whereClause.sdr_id = null;
+                } else {
+                    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sdrIdFilter);
+                    if (isUuid) {
+                        whereClause.sdr_id = sdrIdFilter;
+                    } else {
+                        const sdrUser = await prisma.user.findFirst({
+                            where: {
+                                OR: [
+                                    { name: sdrIdFilter },
+                                    { email: sdrIdFilter }
+                                ]
+                            },
+                            select: { id: true }
+                        });
+                        if (sdrUser) {
+                            whereClause.sdr_id = sdrUser.id;
+                        } else {
+                            whereClause.assigned_to = sdrIdFilter;
+                        }
+                    }
+                }
             }
             if (city !== 'all') {
                 whereClause.city = { equals: city, mode: 'insensitive' };
@@ -177,6 +202,11 @@ export async function GET(req: Request) {
                         whereClause.next_action_date = { lte: todayStr };
                     } else if (isOverdueFilter === 'false') {
                         whereClause.next_action_date = { gt: todayStr };
+                    } else {
+                        whereClause.OR = [
+                            { next_action_date: { lte: todayStr } },
+                            { next_action_date: null }
+                        ];
                     }
                 }
             }
@@ -239,13 +269,25 @@ export async function GET(req: Request) {
         const leads = dbLeads.map(mapPrismaToLead);
         const totalPages = Math.ceil(total / limit);
 
+        // Fetch active SDRs scoped to user's role/team boundary
+        const sdrListWhere: any = { role: 'SDR' };
+        if (dbUser.role === 'MANAGER' && dbUser.team_id) {
+            sdrListWhere.team_id = dbUser.team_id;
+        }
+        const activeSdrs = await prisma.user.findMany({
+            where: sdrListWhere,
+            select: { name: true, email: true }
+        });
+        const sdrsList = activeSdrs.map(s => s.name || s.email).filter(Boolean);
+
         return NextResponse.json({
             leads,
             total,
             page,
             totalPages,
             teamName: dbUser.team?.name || 'Unassigned',
-            tomorrowForecast
+            tomorrowForecast,
+            sdrs: sdrsList
         });
 
     } catch (e: any) {

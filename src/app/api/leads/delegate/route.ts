@@ -40,18 +40,39 @@ export async function POST(req: Request) {
             }
         }
 
-        // Delegate these raw leads completely to the specified team
-        const updateResult = await prisma.lead.updateMany({
-            where: {
-                id: { in: leadIds }
-            },
-            data: {
-                team_id: teamId,
-                manager_id: managerId || null,
-                sdr_id: sdrId || null,
-                assigned_to: assignedTo,
-                assigned_date: assignedDate
-            }
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Delegate raw leads completely inside a transaction.
+        // If sdrId is provided and next_action_date is null, set next_action_date to todayStr.
+        const updateResult = await prisma.$transaction(async (tx) => {
+            await tx.lead.updateMany({
+                where: {
+                    id: { in: leadIds },
+                    next_action_date: null
+                },
+                data: {
+                    team_id: teamId,
+                    manager_id: managerId || null,
+                    sdr_id: sdrId || null,
+                    assigned_to: assignedTo,
+                    assigned_date: assignedDate,
+                    next_action_date: sdrId ? todayStr : null
+                }
+            });
+
+            return await tx.lead.updateMany({
+                where: {
+                    id: { in: leadIds },
+                    next_action_date: { not: null }
+                },
+                data: {
+                    team_id: teamId,
+                    manager_id: managerId || null,
+                    sdr_id: sdrId || null,
+                    assigned_to: assignedTo,
+                    assigned_date: assignedDate
+                }
+            });
         });
 
         return NextResponse.json({ success: true, count: updateResult.count });

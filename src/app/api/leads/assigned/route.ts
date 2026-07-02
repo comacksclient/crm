@@ -71,7 +71,23 @@ export async function GET(req: Request) {
             };
         });
 
-        return NextResponse.json({ leads: mappedLeads });
+        // Fetch ALL SDRs scoped to Admin/Manager boundaries to populate filters
+        const sdrQueryWhere: any = { role: 'SDR' };
+        if (dbUser.role === 'MANAGER' && dbUser.team_id) {
+            sdrQueryWhere.team_id = dbUser.team_id;
+        }
+
+        const allSdrs = await prisma.user.findMany({
+            where: sdrQueryWhere,
+            select: { name: true, email: true }
+        });
+
+        const sdrNamesList = allSdrs.map(s => s.name || s.email).filter(Boolean);
+
+        return NextResponse.json({
+            leads: mappedLeads,
+            sdrs: sdrNamesList
+        });
     } catch (e: any) {
         console.error("Error fetching assigned leads:", e);
         return NextResponse.json({ error: e.message || 'Internal Server Error' }, { status: 500 });

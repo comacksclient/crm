@@ -358,7 +358,7 @@ export default function AdminDelegationDesk() {
                                                     size="sm"
                                                     disabled={!selectedTeam || assigning}
                                                     onClick={() => handleDelegateCity(leadsList, city)}
-                                                    className="w-full bg-indigo-650 hover:bg-indigo-750 text-white rounded-xl text-xs font-semibold h-8 disabled:opacity-40"
+                                                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-semibold h-8 disabled:opacity-40"
                                                 >
                                                     Push Entire Pool
                                                 </Button>
@@ -390,7 +390,7 @@ export default function AdminDelegationDesk() {
                         </span>
                     </div>
 
-                    <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl border border-slate-250 dark:border-slate-700">
+                    <div className="flex flex-wrap items-end gap-3 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
                         <div className="flex flex-col gap-1">
                             <Label className="text-[9px] text-slate-400 font-bold uppercase ml-1">1. Target Team *</Label>
                             <Select value={selectedTeam} onValueChange={(val) => { setSelectedTeam(val); setSelectedManager(''); setSelectedSdr(''); }}>
@@ -418,7 +418,7 @@ export default function AdminDelegationDesk() {
                                     <SelectValue placeholder="Skip / Team Default" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="none" className="italic text-slate-450">None / Skip</SelectItem>
+                                    <SelectItem value="none" className="italic text-slate-500">None / Skip</SelectItem>
                                     {allUsers
                                         .filter(u => u.team_id === selectedTeam && u.role === 'MANAGER')
                                         .map(u => (
@@ -436,7 +436,7 @@ export default function AdminDelegationDesk() {
                                     <SelectValue placeholder="Skip / Team Default" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="none" className="italic text-slate-450">None / Skip</SelectItem>
+                                    <SelectItem value="none" className="italic text-slate-500">None / Skip</SelectItem>
                                     {allUsers
                                         .filter(u => u.team_id === selectedTeam && u.role === 'SDR')
                                         .map(u => (
@@ -447,7 +447,7 @@ export default function AdminDelegationDesk() {
                             </Select>
                         </div>
 
-                        <div className="flex items-center gap-2 pt-4">
+                        <div className="flex items-center gap-2">
                             <Button
                                 onClick={() => setShowDistributeModal(true)}
                                 variant="outline"
@@ -461,7 +461,7 @@ export default function AdminDelegationDesk() {
                             <Button
                                 onClick={handleDelegate}
                                 disabled={assigning || selectedLeads.size === 0 || !selectedTeam}
-                                className="bg-indigo-650 hover:bg-indigo-755 text-white min-w-[110px] shadow-sm h-9 rounded-lg text-xs font-bold"
+                                className="bg-indigo-600 hover:bg-indigo-700 text-white min-w-[110px] shadow-sm h-9 rounded-lg text-xs font-bold"
                             >
                                 {assigning ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                 Push Selected
@@ -554,7 +554,7 @@ export default function AdminDelegationDesk() {
                                                     {lead.city || lead.assignment_info || 'N/A'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 text-center text-slate-650 dark:text-slate-400">
+                                            <td className="px-6 py-4 text-center text-slate-600 dark:text-slate-400">
                                                 {lead.lead_type || 'New'}
                                             </td>
                                         </tr>
@@ -633,7 +633,7 @@ export default function AdminDelegationDesk() {
                             <Button
                                 onClick={handleDistribute}
                                 disabled={distributing || !distributeCount || !selectedTeam}
-                                className="bg-amber-650 hover:bg-amber-750 text-white"
+                                className="bg-amber-600 hover:bg-amber-700 text-white"
                             >
                                 {distributing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Zap className="h-4 w-4 mr-2" />}
                                 Distribute Now

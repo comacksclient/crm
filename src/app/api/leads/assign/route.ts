@@ -65,18 +65,39 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: 'Target SDR not found.' }, { status: 404 });
         }
 
-        // Update all Leads to belong to this SDR, and also record who the allocating Manager was.
-        const updateResult = await prisma.lead.updateMany({
-            where: {
-                id: { in: leadIds }
-            },
-            data: {
-                sdr_id: sdrId,
-                team_id: targetSdr.team_id,
-                manager_id: dbUser.id,
-                assigned_to: targetSdr.name || targetSdr.email,
-                assigned_date: new Date().toISOString()
-            }
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // Update all Leads to belong to this SDR inside a transaction.
+        // If they had a null next_action_date, schedule them for today. Otherwise, keep their future dates.
+        const updateResult = await prisma.$transaction(async (tx) => {
+            await tx.lead.updateMany({
+                where: {
+                    id: { in: leadIds },
+                    next_action_date: null
+                },
+                data: {
+                    sdr_id: sdrId,
+                    team_id: targetSdr.team_id,
+                    manager_id: dbUser.id,
+                    assigned_to: targetSdr.name || targetSdr.email,
+                    assigned_date: new Date().toISOString(),
+                    next_action_date: todayStr
+                }
+            });
+
+            return await tx.lead.updateMany({
+                where: {
+                    id: { in: leadIds },
+                    next_action_date: { not: null }
+                },
+                data: {
+                    sdr_id: sdrId,
+                    team_id: targetSdr.team_id,
+                    manager_id: dbUser.id,
+                    assigned_to: targetSdr.name || targetSdr.email,
+                    assigned_date: new Date().toISOString()
+                }
+            });
         });
 
         return NextResponse.json({ success: true, count: updateResult.count });

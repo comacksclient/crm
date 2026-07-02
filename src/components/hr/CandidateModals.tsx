@@ -363,7 +363,7 @@ export function BulkUploadCandidateModal({ onSuccess, onClose }: BulkUploadCandi
             <div className="bg-white dark:bg-slate-950 rounded-2xl shadow-xl w-full max-w-2xl overflow-hidden border border-slate-200 dark:border-slate-800 p-6 flex flex-col max-h-[85vh] space-y-6">
                 <div className="flex justify-between items-center shrink-0">
                     <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                        <Plus className="h-5 w-5 text-indigo-650" />
+                        <Plus className="h-5 w-5 text-indigo-600" />
                         Bulk Import Candidates (CSV)
                     </h2>
                     <Button variant="ghost" size="icon" onClick={onClose} className="text-slate-400">
@@ -420,7 +420,7 @@ export function BulkUploadCandidateModal({ onSuccess, onClose }: BulkUploadCandi
                                             <th className="px-4 py-2">Schedule</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-150 dark:divide-slate-800 bg-white dark:bg-slate-950">
+                                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-950">
                                         {preview.map((row, idx) => (
                                             <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-900/50">
                                                 <td className="px-4 py-2 font-medium text-slate-900 dark:text-slate-200">
@@ -449,7 +449,7 @@ export function BulkUploadCandidateModal({ onSuccess, onClose }: BulkUploadCandi
                         type="button"
                         onClick={handleUpload}
                         disabled={uploading || preview.length === 0}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-650/15 font-semibold"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-600/15 font-semibold"
                     >
                         {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
                         {uploading ? 'Importing...' : `Import ${preview.length} Candidates`}

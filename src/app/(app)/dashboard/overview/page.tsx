@@ -128,10 +128,10 @@ function KpiCard({ icon: Icon, label, value, sub, color }: {
 const meetingStatusStyles: Record<string, string> = {
     'Scheduled': 'bg-indigo-50 text-indigo-700 border-indigo-200',
     'Show Up': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-250',
+    'Completed': 'bg-emerald-50 text-emerald-700 border-emerald-200',
     'No Show': 'bg-rose-50 text-rose-700 border-rose-200',
     'Rescheduled': 'bg-amber-50 text-amber-700 border-amber-200',
-    'Cancelled': 'bg-slate-50 text-slate-600 border-slate-250',
+    'Cancelled': 'bg-slate-50 text-slate-600 border-slate-200',
 };
 
 export default function OverviewPage() {
@@ -173,7 +173,7 @@ export default function OverviewPage() {
         return (
             <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
                 <div className="text-center space-y-4">
-                    <Loader2 className="h-10 w-10 animate-spin text-indigo-650 mx-auto" />
+                    <Loader2 className="h-10 w-10 animate-spin text-indigo-600 mx-auto" />
                     <p className="text-slate-500 text-xs font-semibold">Loading command center dashboard...</p>
                 </div>
             </div>
@@ -217,7 +217,7 @@ export default function OverviewPage() {
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-3">
-                            <BarChart3 className="h-6 w-6 text-indigo-650" />
+                            <BarChart3 className="h-6 w-6 text-indigo-600" />
                             System Overview Panel
                         </h1>
                         <p className="text-xs text-slate-500 mt-1 font-medium">Real-time performance indicators and operational metrics.</p>
@@ -280,13 +280,13 @@ export default function OverviewPage() {
                         <div className="flex gap-1.5 bg-slate-100 p-1 rounded-xl border">
                             <button
                                 onClick={() => setStatsPeriod('today')}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${statsPeriod === 'today' ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-500'}`}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${statsPeriod === 'today' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                             >
                                 Today's Activity
                             </button>
                             <button
                                 onClick={() => setStatsPeriod('weekly')}
-                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${statsPeriod === 'weekly' ? 'bg-white text-indigo-650 shadow-sm' : 'text-slate-500'}`}
+                                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${statsPeriod === 'weekly' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
                             >
                                 Past 7 Days
                             </button>
@@ -355,7 +355,7 @@ export default function OverviewPage() {
                                                 <p className="text-[10px] font-bold text-slate-400 uppercase">Connect Rate</p>
                                                 <p className="text-[10px] text-slate-500 mt-0.5">Pickups vs dials</p>
                                             </div>
-                                            <span className="text-lg font-extrabold text-indigo-650">{activeStats.connectRate}%</span>
+                                            <span className="text-lg font-extrabold text-indigo-600">{activeStats.connectRate}%</span>
                                         </div>
                                         <div className="p-3.5 rounded-xl border border-slate-150 bg-slate-50/50 dark:bg-slate-900/50 flex justify-between items-center">
                                             <div>
@@ -409,11 +409,11 @@ export default function OverviewPage() {
                                                 <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Conversion Metrics</h4>
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <div className="p-2.5 border rounded-xl bg-indigo-50/10 dark:bg-indigo-950/20 border-indigo-100 dark:border-indigo-900/30">
-                                                        <p className="text-[9px] font-semibold text-indigo-750 dark:text-indigo-400">Interested Leads</p>
+                                                        <p className="text-[9px] font-semibold text-indigo-700 dark:text-indigo-400">Interested Leads</p>
                                                         <p className="text-base font-extrabold text-indigo-900 dark:text-indigo-200 mt-0.5">{data.weekly?.conversion?.interestedLeads || 0}</p>
                                                     </div>
                                                     <div className="p-2.5 border rounded-xl bg-emerald-50/10 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30">
-                                                        <p className="text-[9px] font-semibold text-emerald-750 dark:text-emerald-400">Meetings Booked</p>
+                                                        <p className="text-[9px] font-semibold text-emerald-700 dark:text-emerald-400">Meetings Booked</p>
                                                         <p className="text-base font-extrabold text-emerald-900 dark:text-emerald-200 mt-0.5">{data.weekly?.conversion?.meetingsBooked || 0}</p>
                                                     </div>
                                                     <div className="p-2.5 border rounded-xl bg-slate-50/50 dark:bg-slate-900/50">
@@ -432,7 +432,7 @@ export default function OverviewPage() {
                                     {/* Follow-ups & Activity Metrics */}
                                     <div className="space-y-4 lg:border-l lg:border-slate-200 lg:pl-6">
                                         <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                            <CalendarDays className="h-4 w-4 text-indigo-650" /> Follow-ups & Activity (Weekly)
+                                            <CalendarDays className="h-4 w-4 text-indigo-600" /> Follow-ups & Activity (Weekly)
                                         </h3>
                                         <div className="space-y-4">
                                             <div className="space-y-2">
@@ -451,7 +451,7 @@ export default function OverviewPage() {
                                                         <p className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5">{data.weekly?.followUp?.pending || 0}</p>
                                                     </div>
                                                     <div className="p-2.5 border rounded-xl bg-rose-50/10 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/30">
-                                                        <p className="text-[9px] font-semibold text-rose-750 dark:text-rose-455">Overdue Follow-ups</p>
+                                                        <p className="text-[9px] font-semibold text-rose-700 dark:text-rose-400">Overdue Follow-ups</p>
                                                         <p className="text-base font-extrabold text-rose-900 dark:text-rose-200 mt-0.5">{data.weekly?.followUp?.overdue || 0}</p>
                                                     </div>
                                                 </div>
@@ -484,12 +484,12 @@ export default function OverviewPage() {
                                     {/* Efficiency & Accuracy Ratings */}
                                     <div className="space-y-4 lg:border-l lg:border-slate-200 lg:pl-6">
                                         <h3 className="text-xs font-extrabold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                            <Percent className="h-4 w-4 text-indigo-650" /> Weekly Efficiency Ratings
+                                            <Percent className="h-4 w-4 text-indigo-600" /> Weekly Efficiency Ratings
                                         </h3>
                                         <div className="space-y-3">
                                             <div className="p-3.5 bg-indigo-50/10 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/30 rounded-2xl flex justify-between items-center">
                                                 <div>
-                                                    <p className="text-[10px] font-bold text-indigo-750 dark:text-indigo-400 uppercase tracking-wide">Connect Rate</p>
+                                                    <p className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wide">Connect Rate</p>
                                                     <p className="text-[9px] text-indigo-600/85 mt-0.5">Pickups vs outbound dials</p>
                                                 </div>
                                                 <span className="text-lg font-extrabold text-indigo-900 dark:text-indigo-200">{data.weekly?.efficiency?.connectRate || '0.0'}%</span>
@@ -497,7 +497,7 @@ export default function OverviewPage() {
 
                                             <div className="p-3.5 bg-blue-50/10 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-2xl flex justify-between items-center">
                                                 <div>
-                                                    <p className="text-[10px] font-bold text-blue-750 dark:text-blue-400 uppercase tracking-wide">Interest Conversion</p>
+                                                    <p className="text-[10px] font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wide">Interest Conversion</p>
                                                     <p className="text-[9px] text-blue-600/85 mt-0.5">High interest vs pickups</p>
                                                 </div>
                                                 <span className="text-lg font-extrabold text-blue-900 dark:text-blue-200">{data.weekly?.efficiency?.interestRate || '0.0'}%</span>
@@ -505,7 +505,7 @@ export default function OverviewPage() {
 
                                             <div className="p-3.5 bg-emerald-50/10 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl flex justify-between items-center">
                                                 <div>
-                                                    <p className="text-[10px] font-bold text-emerald-750 dark:text-emerald-400 uppercase tracking-wide">Booking Rate</p>
+                                                    <p className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Booking Rate</p>
                                                     <p className="text-[9px] text-emerald-600/85 mt-0.5">Meetings booked vs pickups</p>
                                                 </div>
                                                 <span className="text-lg font-extrabold text-emerald-900 dark:text-emerald-200">{data.weekly?.efficiency?.bookingRate || '0.0'}%</span>
@@ -627,7 +627,7 @@ export default function OverviewPage() {
                                             <p className="text-[10px] text-slate-500">
                                                 📅 {m.meeting_date} at {m.meeting_time}
                                             </p>
-                                            <p className="text-[10px] text-indigo-650 mt-0.5 truncate font-medium">
+                                            <p className="text-[10px] text-indigo-600 mt-0.5 truncate font-medium">
                                                 Booked by: {m.booked_by}
                                             </p>
                                         </div>

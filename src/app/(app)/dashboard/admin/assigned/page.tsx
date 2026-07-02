@@ -41,6 +41,7 @@ export default function AssignedLeadsPage() {
     const [selectedLeadTypeFilter, setSelectedLeadTypeFilter] = useState('all');
     const [selectedOutcomeFilter, setSelectedOutcomeFilter] = useState('all');
     const [selectedActionFilter, setSelectedActionFilter] = useState('all');
+    const [sdrList, setSdrList] = useState<string[]>([]);
 
     useEffect(() => {
         fetchData();
@@ -52,6 +53,7 @@ export default function AssignedLeadsPage() {
             if (res.ok) {
                 const data = await res.json();
                 setLeads(data.leads || []);
+                setSdrList(data.sdrs || []);
             } else if (res.status === 403) {
                 toast.error('Manager privileges required to view assigned desk.');
             }
@@ -210,7 +212,7 @@ export default function AssignedLeadsPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All SDRs</SelectItem>
-                                        {uniqueSdrs.map(sdr => (
+                                        {Array.from(new Set(sdrList.length > 0 ? sdrList : uniqueSdrs)).map(sdr => (
                                             <SelectItem key={sdr} value={sdr}>{sdr}</SelectItem>
                                         ))}
                                     </SelectContent>
@@ -331,7 +333,7 @@ export default function AssignedLeadsPage() {
 
                 <div className="flex items-center justify-between px-2">
                     <div className="flex items-center gap-4">
-                        <button onClick={selectAll} className="text-sm text-indigo-650 dark:text-indigo-400 font-bold hover:underline">
+                        <button onClick={selectAll} className="text-sm text-indigo-600 dark:text-indigo-400 font-bold hover:underline">
                             {selectedLeads.size === filteredLeads.length && filteredLeads.length > 0 ? 'Deselect All' : 'Select All'}
                         </button>
                     </div>
@@ -377,7 +379,7 @@ export default function AssignedLeadsPage() {
                                                     type="checkbox"
                                                     checked={selectedLeads.has(lead.id)}
                                                     onChange={() => { }} // Controlled via row click
-                                                    className="h-4 w-4 rounded border-slate-300 text-indigo-650 focus:ring-indigo-600 pointer-events-none"
+                                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-600 pointer-events-none"
                                                 />
                                             </td>
                                             <td className="px-6 py-4">
@@ -389,7 +391,7 @@ export default function AssignedLeadsPage() {
                                                     {lead.teamName}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 font-bold text-indigo-750 dark:text-indigo-300">
+                                            <td className="px-6 py-4 font-bold text-indigo-700 dark:text-indigo-300">
                                                 {lead.sdrName}
                                             </td>
                                             <td className="px-6 py-4">
