@@ -49,17 +49,28 @@ export async function GET(req: Request) {
 
         // 3. Keep Overdue Flag and Priority Scores Sync'd with Date Progressions
         // Marks active leads whose scheduled date has passed as overdue (+100 priority score)
-        await prisma.lead.updateMany({
+        const overdueNeedSync = await prisma.lead.findFirst({
             where: {
                 lead_status: 'Active',
                 next_action_date: { lt: todayStr },
                 overdue: false
             },
-            data: {
-                overdue: true,
-                priority_score: { increment: 100 }
-            }
+            select: { id: true }
         });
+
+        if (overdueNeedSync) {
+            await prisma.lead.updateMany({
+                where: {
+                    lead_status: 'Active',
+                    next_action_date: { lt: todayStr },
+                    overdue: false
+                },
+                data: {
+                    overdue: true,
+                    priority_score: { increment: 100 }
+                }
+            });
+        }
 
         // 4. Implement Dynamic 75-Lead Daily Auto-Queue for SDRs
         // If an SDR fetches their active queue and their due leads are < 75, we auto-assign unassigned leads

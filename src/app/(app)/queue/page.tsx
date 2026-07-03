@@ -53,6 +53,7 @@ export default function QueuePage() {
     const [meetingDate, setMeetingDate] = useState('');
     const [meetingTime, setMeetingTime] = useState('');
     const [whatsappSent, setWhatsappSent] = useState(false);
+    const [callbackDate, setCallbackDate] = useState('');
 
     // Heartbeat setup for live active monitoring
     useEffect(() => {
@@ -207,6 +208,7 @@ export default function QueuePage() {
                 whatsappDetailsSent: whatsappSent,
                 meetingDate: meetingDate || undefined,
                 meetingTime: meetingTime || undefined,
+                providedNextActionDate: callbackDate || undefined,
             };
 
             const res = await fetch('/api/queue/log-call', {
@@ -218,6 +220,7 @@ export default function QueuePage() {
             if (res.ok) {
                 toast.success('Call logged and next action scheduled!');
                 setActiveLead(null);
+                setCallbackDate('');
                 fetchLeads(); // Refresh list
             } else {
                 const data = await res.json();
@@ -227,6 +230,29 @@ export default function QueuePage() {
             toast.error('Error logging call details.');
         } finally {
             setSubmitting(false);
+        }
+    };
+
+    const handleUpdateNextActionDate = async (lead: Lead, newDate: string) => {
+        try {
+            const res = await fetch('/api/leads/reschedule', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    leadId: lead._rowIndex,
+                    next_action_date: newDate || null
+                })
+            });
+
+            if (res.ok) {
+                toast.success('Next action date updated successfully');
+                fetchLeads(); // Refresh list
+            } else {
+                const data = await res.json();
+                toast.error(data.error || 'Failed to update date');
+            }
+        } catch (e) {
+            toast.error('Error updating next action date');
         }
     };
 
@@ -267,7 +293,11 @@ export default function QueuePage() {
                 onClick={() => handleStartCall(lead)}
                 className="hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-colors cursor-pointer group"
             >
-                <td className="px-6 py-4 font-semibold text-slate-950 dark:text-slate-100 max-w-[200px] truncate" title={lead.lead_identity}>
+                <td
+                    className="px-6 py-4 font-semibold text-slate-950 dark:text-slate-100 max-w-[200px] truncate"
+                    title={lead.lead_identity}
+                    onClick={(e) => e.stopPropagation()}
+                >
                     {lead.clinic_name || lead.lead_identity.split(' - ')[0] || lead.lead_identity}
                 </td>
                 <td className="px-6 py-4 text-slate-600 dark:text-slate-400" title={lead.city || undefined}>
@@ -286,10 +316,20 @@ export default function QueuePage() {
                         {lead.lead_status}
                     </span>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap font-medium">
-                    <span className={isOverdue ? "text-red-600 font-bold" : "text-slate-600"}>
-                        {lead.next_action_date ? format(new Date(lead.next_action_date), 'MMM dd, yyyy') : 'No Action Scheduled'}
-                    </span>
+                <td className="px-6 py-4 whitespace-nowrap font-medium" onClick={(e) => e.stopPropagation()}>
+                    <Input
+                        type="date"
+                        value={(lead.next_action_date || '').substring(0, 10)}
+                        onChange={async (e) => {
+                            const newDate = e.target.value;
+                            await handleUpdateNextActionDate(lead, newDate);
+                        }}
+                        className={`bg-transparent border-transparent hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 focus:bg-white dark:focus:bg-slate-900 border p-1.5 w-[135px] text-xs font-semibold rounded transition-all cursor-pointer ${
+                            isOverdue
+                                ? "text-red-600 dark:text-red-400 font-bold"
+                                : "text-slate-700 dark:text-slate-300"
+                        }`}
+                    />
                 </td>
                 <td className="px-6 py-4 text-center whitespace-nowrap">
                     {isOverdue ? (
@@ -465,7 +505,7 @@ export default function QueuePage() {
                             className={`px-4 py-2 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'whatsapp' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                         >
                             <MessageSquare className="h-4 w-4" />
-                            WhatsApp Nurture Queue
+                            WhatsApp Follow Up
                         </button>
                     </div>
                 )}
@@ -522,7 +562,7 @@ export default function QueuePage() {
                                     <CardContent className="p-6 space-y-6">
                                         <div className="space-y-2">
                                             <Label htmlFor="outcome" className="font-semibold text-slate-700">Call Outcome</Label>
-                                            <Select value={outcome} onValueChange={(v) => setOutcome(v as CallOutcome)} required>
+                                            <Select value={outcome} onValueChange={(v) => { setOutcome(v as CallOutcome); if (v !== 'Call back requested') setCallbackDate(''); }} required>
                                                 <SelectTrigger id="outcome" className="rounded-xl border-slate-200">
                                                     <SelectValue placeholder="Select call outcome..." />
                                                 </SelectTrigger>
@@ -535,6 +575,21 @@ export default function QueuePage() {
                                                 </SelectContent>
                                             </Select>
                                         </div>
+
+                                        {outcome === 'Call back requested' && (
+                                            <div className="space-y-2 p-4 border border-indigo-150 rounded-xl bg-indigo-50/20">
+                                                <Label htmlFor="callbackDate" className="font-semibold text-slate-700">Callback Date <span className="text-rose-500">*</span></Label>
+                                                <Input
+                                                    id="callbackDate"
+                                                    type="date"
+                                                    value={callbackDate}
+                                                    onChange={(e) => setCallbackDate(e.target.value)}
+                                                    className="bg-white rounded-lg border-slate-200"
+                                                    min={new Date().toISOString().split('T')[0]}
+                                                    required
+                                                />
+                                            </div>
+                                        )}
 
                                         {outcome === 'Doctor Connected' && (
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-5 border border-indigo-100 rounded-xl bg-indigo-50/20">

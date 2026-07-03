@@ -25,11 +25,18 @@ export async function PATCH(req: Request) {
             return NextResponse.json({ error: 'Lead not found in Database' }, { status: 404 });
         }
 
-        // Apply date update
+        // Apply date update and recalculate priority metrics
+        const todayStr = new Date().toISOString().split('T')[0];
+        const overdue = next_action_date < todayStr;
+        const interestLevel = dbLead.interest_level || 0;
+        const priorityScore = (overdue ? 100 : 0) + (interestLevel * 10);
+
         const updatedResult = await prisma.lead.update({
             where: { id: leadId },
             data: {
-                next_action_date: next_action_date
+                next_action_date: next_action_date,
+                overdue: overdue,
+                priority_score: priorityScore
             }
         });
 
