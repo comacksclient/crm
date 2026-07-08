@@ -5,6 +5,9 @@ import { startOfDay, subDays } from 'date-fns';
 
 export const dynamic = 'force-dynamic';
 
+let lastBackfillCheck = 0;
+const BACKFILL_CHECK_INTERVAL = 10 * 60 * 1000; // 10 minutes
+
 export async function GET(req: Request) {
     try {
         const session = await auth();
@@ -23,154 +26,159 @@ export async function GET(req: Request) {
 
         // --- IDEMPOTENT BACKGROUND BACKFILL SYSTEM ---
         // Dynamically seeds the CallLog table from older lead records to preserve analytics
-        const unloggedLeadsCount = await prisma.lead.count({
-            where: {
-                call_outcome: { not: null },
-                last_call_date: { not: null },
-                logs: { none: {} }
-            }
-        });
+        const nowMs = Date.now();
+        if (nowMs - lastBackfillCheck > BACKFILL_CHECK_INTERVAL) {
+            lastBackfillCheck = nowMs;
 
-        const unloggedMeetingsCount = await prisma.meeting.count({
-            where: {
-                lead: {
+            const unloggedLeadsCount = await prisma.lead.count({
+                where: {
+                    call_outcome: { not: null },
+                    last_call_date: { not: null },
                     logs: { none: {} }
                 }
-            }
-        });
+            });
 
-        if (unloggedLeadsCount > 0 || unloggedMeetingsCount > 0) {
-            console.log(`[Backfill] Syncing data: Found ${unloggedLeadsCount} unlogged leads & ${unloggedMeetingsCount} unlogged meetings.`);
-
-            if (unloggedLeadsCount > 0) {
-                const leadsToBackfill = await prisma.lead.findMany({
-                    where: {
-                        call_outcome: { not: null },
-                        last_call_date: { not: null },
+            const unloggedMeetingsCount = await prisma.meeting.count({
+                where: {
+                    lead: {
                         logs: { none: {} }
-                    },
-                    select: {
-                        id: true,
-                        call_outcome: true,
-                        doctor_type: true,
-                        interest_level: true,
-                        call_notes: true,
-                        last_call_date: true,
-                        sdr_id: true,
-                        assigned_to: true
                     }
-                });
+                }
+            });
 
-                for (const lead of leadsToBackfill) {
-                    let sdrId = lead.sdr_id;
-                    if (!sdrId && lead.assigned_to) {
-                        const user = await prisma.user.findFirst({
-                            where: {
-                                OR: [
-                                    { email: lead.assigned_to },
-                                    { name: lead.assigned_to }
-                                ]
-                            },
-                            select: { id: true }
-                        });
-                        if (user) sdrId = user.id;
-                    }
+            if (unloggedLeadsCount > 0 || unloggedMeetingsCount > 0) {
+                console.log(`[Backfill] Syncing data: Found ${unloggedLeadsCount} unlogged leads & ${unloggedMeetingsCount} unlogged meetings.`);
 
-                    if (!sdrId) {
-                        const defaultUser = await prisma.user.findFirst({
-                            where: { role: 'SDR' },
-                            select: { id: true }
-                        }) || await prisma.user.findFirst({
-                            select: { id: true }
-                        });
-                        if (defaultUser) sdrId = defaultUser.id;
-                    }
-
-                    if (!sdrId) continue;
-
-                    let callDate = new Date();
-                    if (lead.last_call_date) {
-                        const parsed = new Date(lead.last_call_date);
-                        if (!isNaN(parsed.getTime())) {
-                            callDate = parsed;
-                        }
-                    }
-
-                    await prisma.callLog.create({
-                        data: {
-                            lead_id: lead.id,
-                            sdr_id: sdrId,
-                            outcome: lead.call_outcome || 'Unknown',
-                            doctor_type: lead.doctor_type,
-                            interest_level: lead.interest_level,
-                            notes: lead.call_notes || 'Backfilled historical call log',
-                            createdAt: callDate
+                if (unloggedLeadsCount > 0) {
+                    const leadsToBackfill = await prisma.lead.findMany({
+                        where: {
+                            call_outcome: { not: null },
+                            last_call_date: { not: null },
+                            logs: { none: {} }
+                        },
+                        select: {
+                            id: true,
+                            call_outcome: true,
+                            doctor_type: true,
+                            interest_level: true,
+                            call_notes: true,
+                            last_call_date: true,
+                            sdr_id: true,
+                            assigned_to: true
                         }
                     });
-                }
-            }
 
-            if (unloggedMeetingsCount > 0) {
-                const meetingsToBackfill = await prisma.meeting.findMany({
-                    where: {
-                        lead: {
-                            logs: { none: {} }
+                    for (const lead of leadsToBackfill) {
+                        let sdrId = lead.sdr_id;
+                        if (!sdrId && lead.assigned_to) {
+                            const user = await prisma.user.findFirst({
+                                where: {
+                                    OR: [
+                                        { email: lead.assigned_to },
+                                        { name: lead.assigned_to }
+                                    ]
+                                },
+                                select: { id: true }
+                            });
+                            if (user) sdrId = user.id;
                         }
-                    },
-                    include: {
-                        lead: {
-                            select: {
-                                sdr_id: true,
-                                doctor_type: true
+
+                        if (!sdrId) {
+                            const defaultUser = await prisma.user.findFirst({
+                                where: { role: 'SDR' },
+                                select: { id: true }
+                            }) || await prisma.user.findFirst({
+                                select: { id: true }
+                            });
+                            if (defaultUser) sdrId = defaultUser.id;
+                        }
+
+                        if (!sdrId) continue;
+
+                        let callDate = new Date();
+                        if (lead.last_call_date) {
+                            const parsed = new Date(lead.last_call_date);
+                            if (!isNaN(parsed.getTime())) {
+                                callDate = parsed;
                             }
                         }
-                    }
-                });
 
-                for (const meeting of meetingsToBackfill) {
-                    let sdrId = meeting.lead?.sdr_id;
-                    if (!sdrId && meeting.booked_by) {
-                        const user = await prisma.user.findFirst({
-                            where: { email: meeting.booked_by },
-                            select: { id: true }
+                        await prisma.callLog.create({
+                            data: {
+                                lead_id: lead.id,
+                                sdr_id: sdrId,
+                                outcome: lead.call_outcome || 'Unknown',
+                                doctor_type: lead.doctor_type,
+                                interest_level: lead.interest_level,
+                                notes: lead.call_notes || 'Backfilled historical call log',
+                                createdAt: callDate
+                            }
                         });
-                        if (user) sdrId = user.id;
                     }
+                }
 
-                    if (!sdrId) {
-                        const defaultUser = await prisma.user.findFirst({
-                            where: { role: 'SDR' },
-                            select: { id: true }
-                        }) || await prisma.user.findFirst({
-                            select: { id: true }
-                        });
-                        if (defaultUser) sdrId = defaultUser.id;
-                    }
-
-                    if (!sdrId) continue;
-
-                    let meetingDate = new Date();
-                    const parsed = new Date(meeting.meeting_date);
-                    if (!isNaN(parsed.getTime())) {
-                        meetingDate = parsed;
-                    } else if (meeting.createdAt) {
-                        meetingDate = meeting.createdAt;
-                    }
-
-                    await prisma.callLog.create({
-                        data: {
-                            lead_id: meeting.lead_id,
-                            sdr_id: sdrId,
-                            outcome: 'Doctor Connected',
-                            doctor_type: meeting.lead?.doctor_type || null,
-                            interest_level: 5,
-                            notes: meeting.meeting_notes || 'Backfilled meeting booking call log',
-                            createdAt: meetingDate
+                if (unloggedMeetingsCount > 0) {
+                    const meetingsToBackfill = await prisma.meeting.findMany({
+                        where: {
+                            lead: {
+                                logs: { none: {} }
+                            }
+                        },
+                        include: {
+                            lead: {
+                                select: {
+                                    sdr_id: true,
+                                    doctor_type: true
+                                }
+                            }
                         }
                     });
+
+                    for (const meeting of meetingsToBackfill) {
+                        let sdrId = meeting.lead?.sdr_id;
+                        if (!sdrId && meeting.booked_by) {
+                            const user = await prisma.user.findFirst({
+                                where: { email: meeting.booked_by },
+                                select: { id: true }
+                            });
+                            if (user) sdrId = user.id;
+                        }
+
+                        if (!sdrId) {
+                            const defaultUser = await prisma.user.findFirst({
+                                where: { role: 'SDR' },
+                                select: { id: true }
+                            }) || await prisma.user.findFirst({
+                                select: { id: true }
+                            });
+                            if (defaultUser) sdrId = defaultUser.id;
+                        }
+
+                        if (!sdrId) continue;
+
+                        let meetingDate = new Date();
+                        const parsed = new Date(meeting.meeting_date);
+                        if (!isNaN(parsed.getTime())) {
+                            meetingDate = parsed;
+                        } else if (meeting.createdAt) {
+                            meetingDate = meeting.createdAt;
+                        }
+
+                        await prisma.callLog.create({
+                            data: {
+                                lead_id: meeting.lead_id,
+                                sdr_id: sdrId,
+                                outcome: 'Doctor Connected',
+                                doctor_type: meeting.lead?.doctor_type || null,
+                                interest_level: 5,
+                                notes: meeting.meeting_notes || 'Backfilled meeting booking call log',
+                                createdAt: meetingDate
+                            }
+                        });
+                    }
                 }
+                console.log(`[Backfill] Database backfill sync completed successfully.`);
             }
-            console.log(`[Backfill] Database backfill sync completed successfully.`);
         }
 
         const url = new URL(req.url);
@@ -333,13 +341,43 @@ export async function GET(req: Request) {
         const sixMinutesAgo = new Date(Date.now() - 6 * 60 * 1000);
         const sdrLeaderboard = [];
 
+        const sdrIds = sdrs.map(s => s.id);
+        const sdrEmails = sdrs.map(s => s.email).filter(Boolean) as string[];
+
+        // Bulk aggregation queries to avoid N+1 query loops
+        const [leadCounts, callCounts, meetingTodayCounts, meetingTotalCounts] = await Promise.all([
+            prisma.lead.groupBy({
+                by: ['sdr_id'],
+                where: { lead_status: 'Active', sdr_id: { in: sdrIds } },
+                _count: { id: true }
+            }),
+            prisma.callLog.groupBy({
+                by: ['sdr_id'],
+                where: { sdr_id: { in: sdrIds }, createdAt: { gte: todayStart } },
+                _count: { id: true }
+            }),
+            prisma.meeting.groupBy({
+                by: ['booked_by'],
+                where: { booked_by: { in: sdrEmails }, createdAt: { gte: todayStart } },
+                _count: { id: true }
+            }),
+            prisma.meeting.groupBy({
+                by: ['booked_by'],
+                where: { booked_by: { in: sdrEmails } },
+                _count: { id: true }
+            })
+        ]);
+
+        const leadCountsMap = new Map(leadCounts.map(item => [item.sdr_id || '', item._count.id]));
+        const callCountsMap = new Map(callCounts.map(item => [item.sdr_id || '', item._count.id]));
+        const meetingTodayMap = new Map(meetingTodayCounts.map(item => [item.booked_by || '', item._count.id]));
+        const meetingTotalMap = new Map(meetingTotalCounts.map(item => [item.booked_by || '', item._count.id]));
+
         for (const sdr of sdrs) {
-            const [assignedLeads, callsTodaySdr, meetingsBookedToday, meetingsBookedTotal] = await Promise.all([
-                prisma.lead.count({ where: { sdr_id: sdr.id, lead_status: 'Active' } }),
-                prisma.callLog.count({ where: { sdr_id: sdr.id, createdAt: { gte: todayStart } } }),
-                prisma.meeting.count({ where: { booked_by: sdr.email, createdAt: { gte: todayStart } } }),
-                prisma.meeting.count({ where: { booked_by: sdr.email } })
-            ]);
+            const assignedLeads = leadCountsMap.get(sdr.id) || 0;
+            const callsTodaySdr = callCountsMap.get(sdr.id) || 0;
+            const meetingsBookedToday = meetingTodayMap.get(sdr.email) || 0;
+            const meetingsBookedTotal = meetingTotalMap.get(sdr.email) || 0;
 
             const isLive = sdr.lastActiveAt ? new Date(sdr.lastActiveAt) > sixMinutesAgo : false;
 

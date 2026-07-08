@@ -54,6 +54,7 @@ export default function QueuePage() {
     const [meetingTime, setMeetingTime] = useState('');
     const [whatsappSent, setWhatsappSent] = useState(false);
     const [callbackDate, setCallbackDate] = useState('');
+    const [callbackTime, setCallbackTime] = useState('');
 
     // Heartbeat setup for live active monitoring
     useEffect(() => {
@@ -208,7 +209,7 @@ export default function QueuePage() {
                 whatsappDetailsSent: whatsappSent,
                 meetingDate: meetingDate || undefined,
                 meetingTime: meetingTime || undefined,
-                providedNextActionDate: callbackDate || undefined,
+                providedNextActionDate: callbackDate && callbackTime ? `${callbackDate}T${callbackTime}` : callbackDate || undefined,
             };
 
             const res = await fetch('/api/queue/log-call', {
@@ -221,6 +222,7 @@ export default function QueuePage() {
                 toast.success('Call logged and next action scheduled!');
                 setActiveLead(null);
                 setCallbackDate('');
+                setCallbackTime('');
                 fetchLeads(); // Refresh list
             } else {
                 const data = await res.json();
@@ -562,7 +564,7 @@ export default function QueuePage() {
                                     <CardContent className="p-6 space-y-6">
                                         <div className="space-y-2">
                                             <Label htmlFor="outcome" className="font-semibold text-slate-700">Call Outcome</Label>
-                                            <Select value={outcome} onValueChange={(v) => { setOutcome(v as CallOutcome); if (v !== 'Call back requested') setCallbackDate(''); }} required>
+                                            <Select value={outcome} onValueChange={(v) => { setOutcome(v as CallOutcome); if (v !== 'Call back requested' && v !== 'Assistant picked') { setCallbackDate(''); setCallbackTime(''); } }} required>
                                                 <SelectTrigger id="outcome" className="rounded-xl border-slate-200">
                                                     <SelectValue placeholder="Select call outcome..." />
                                                 </SelectTrigger>
@@ -576,18 +578,31 @@ export default function QueuePage() {
                                             </Select>
                                         </div>
 
-                                        {outcome === 'Call back requested' && (
-                                            <div className="space-y-2 p-4 border border-indigo-150 rounded-xl bg-indigo-50/20">
-                                                <Label htmlFor="callbackDate" className="font-semibold text-slate-700">Callback Date <span className="text-rose-500">*</span></Label>
-                                                <Input
-                                                    id="callbackDate"
-                                                    type="date"
-                                                    value={callbackDate}
-                                                    onChange={(e) => setCallbackDate(e.target.value)}
-                                                    className="bg-white rounded-lg border-slate-200"
-                                                    min={new Date().toISOString().split('T')[0]}
-                                                    required
-                                                />
+                                        {(outcome === 'Call back requested' || outcome === 'Assistant picked') && (
+                                            <div className="grid grid-cols-2 gap-4 p-4 border border-indigo-150 rounded-xl bg-indigo-50/20">
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="callbackDate" className="font-semibold text-slate-700">Callback Date <span className="text-rose-500">*</span></Label>
+                                                    <Input
+                                                        id="callbackDate"
+                                                        type="date"
+                                                        value={callbackDate}
+                                                        onChange={(e) => setCallbackDate(e.target.value)}
+                                                        className="bg-white rounded-lg border-slate-200"
+                                                        min={new Date().toISOString().split('T')[0]}
+                                                        required
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor="callbackTime" className="font-semibold text-slate-700">Callback Time <span className="text-rose-500">*</span></Label>
+                                                    <Input
+                                                        id="callbackTime"
+                                                        type="time"
+                                                        value={callbackTime}
+                                                        onChange={(e) => setCallbackTime(e.target.value)}
+                                                        className="bg-white rounded-lg border-slate-200"
+                                                        required
+                                                    />
+                                                </div>
                                             </div>
                                         )}
 

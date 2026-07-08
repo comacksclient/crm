@@ -127,7 +127,7 @@ export async function GET(req: Request) {
         
         let tomorrowWhere: any = {
             lead_status: 'Active',
-            next_action_date: tomorrowStr
+            next_action_date: { startsWith: tomorrowStr }
         };
         if (dbUser.role === 'SDR') {
             tomorrowWhere.sdr_id = dbUser.id;
@@ -147,15 +147,15 @@ export async function GET(req: Request) {
             whereClause.sdr_id = dbUser.id;
             if (leadStatus === 'Active') {
                 if (scheduleFilter === 'today') {
-                    whereClause.next_action_date = todayStr;
+                    whereClause.next_action_date = { startsWith: todayStr };
                 } else if (scheduleFilter === 'yesterday-overdue') {
                     whereClause.next_action_date = { lt: todayStr };
                 } else if (isOverdueFilter === 'false') {
                     // SDR checking future tab
-                    whereClause.next_action_date = { gt: todayStr };
+                    whereClause.next_action_date = { gt: todayStr + 'T23:59:59' };
                 } else {
                     whereClause.OR = [
-                        { next_action_date: { lte: todayStr } },
+                        { next_action_date: { lte: todayStr + 'T23:59:59' } },
                         { next_action_date: null }
                     ];
                 }
@@ -202,20 +202,19 @@ export async function GET(req: Request) {
 
             if (leadStatus === 'Active') {
                 if (scheduleFilter === 'today') {
-                    whereClause.next_action_date = todayStr;
+                    whereClause.next_action_date = { startsWith: todayStr };
                 } else if (scheduleFilter === 'yesterday-overdue') {
                     whereClause.next_action_date = { lt: todayStr };
                 } else if (scheduleFilter === 'future') {
-                    whereClause.next_action_date = { gt: todayStr };
+                    whereClause.next_action_date = { gt: todayStr + 'T23:59:59' };
                 } else {
-
                     if (isOverdueFilter === 'true') {
-                        whereClause.next_action_date = { lte: todayStr };
+                        whereClause.next_action_date = { lte: todayStr + 'T23:59:59' };
                     } else if (isOverdueFilter === 'false') {
-                        whereClause.next_action_date = { gt: todayStr };
+                        whereClause.next_action_date = { gt: todayStr + 'T23:59:59' };
                     } else {
                         whereClause.OR = [
-                            { next_action_date: { lte: todayStr } },
+                            { next_action_date: { lte: todayStr + 'T23:59:59' } },
                             { next_action_date: null }
                         ];
                     }
